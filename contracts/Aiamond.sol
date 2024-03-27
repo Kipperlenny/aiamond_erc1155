@@ -407,6 +407,7 @@ contract Aiamond is
 
             guess.players[pi] = 0; // Set the deposit to 0
         }
+
         return totalDeposited;
     }
 
@@ -588,10 +589,15 @@ contract Aiamond is
     }
 
     // Get the details of a guess
-    function getGuess(uint256 _nftId, uint256 _guessId) public view returns (uint256, address, uint256, bytes32, uint256, bool, uint256) {
+    function getGuess(uint256 _nftId, uint256 _guessId) public view returns (uint256, address, uint256, uint256, bytes32, uint256, bool, uint256) {
         require(_guessId < nftInfo[_nftId].guesses.length, "Invalid guess ID");
         Guess storage guess = nftInfo[_nftId].guesses[_guessId];
-        return (guess.dealer, guess.tokenAddress, guess.timestamp, guess.guessHash, guess.initialPrice, guess.isPriceRevealed, guess.neededDeposit);
+        return (guess.dealer, guess.tokenAddress, guess.chainId, guess.timestamp, guess.guessHash, guess.initialPrice, guess.isPriceRevealed, guess.neededDeposit);
+    }
+
+    function getNftInfo(uint256 dealerNftId) public view returns (uint256, uint256) {
+        NftInfo storage info = nftInfo[dealerNftId];
+        return (info.guesses.length, info.correctGuesses);
     }
 
     // END dApp functions
