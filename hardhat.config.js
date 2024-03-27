@@ -6,11 +6,20 @@ const endpointUrl = process.env.quickNodeEndpoint;
 
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
-  solidity: "0.8.24",
+  solidity: {
+    version: "0.8.24",
+    settings: {
+      optimizer: {
+        enabled: true,
+        runs: 200
+      }
+    }
+  },
   sourcify: {
     enabled: true
   },
-  defaultNetwork: "polygonMumbai",
+  // defaultNetwork: "polygonMumbai",
+  defaultNetwork: "hardhat",
   networks: {
     polygonMumbai: {
       url: endpointUrl,

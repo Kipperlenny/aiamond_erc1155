@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Supply.sol";
 import "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Pausable.sol";
 import "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Burnable.sol";
+import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 
 /// @custom:security-contact info@aiamond.com
 contract Aiamond is
@@ -13,7 +14,8 @@ contract Aiamond is
     Ownable,
     ERC1155Supply,
     ERC1155Pausable,
-    ERC1155Burnable
+    ERC1155Burnable,
+    ERC1155Holder
 {
     uint256 public constant CHIPS = 0;
     uint256 public constant FIRST_DEALER_NFT_ID = 1;
@@ -438,16 +440,17 @@ contract Aiamond is
 
     // Function to withdraw the contract balance
     function withdrawBalance() public onlyOwner {
-        require(
-            payable(owner()).send(address(this).balance),
-            "Failed to send Ether"
-        );
+        (bool success, ) = payable(owner()).call{value: address(this).balance}("");
+        require(success, "Failed to send Ether");
     }
+
+    receive() external payable {}
 
     function withdrawChips() public onlyOwner {
         uint256 balance = balanceOf(address(this), CHIPS);
         require(balance > 0, "No CHIPS to withdraw");
-        safeTransferFrom(address(this), owner(), CHIPS, balance, "");
+        _safeTransferFrom(address(this), owner(), CHIPS, balance, "");
+
     }
 
     // Function to add CHIPS to an NFT (for testing purposes)
@@ -459,6 +462,14 @@ contract Aiamond is
 
         // Add the CHIPS to the NFT
         nftBalances[_nftId] += _amount;
+    }
+
+    // Function to add CHIPS to the contract
+    function addChipsToContract(uint256 _amount) public onlyOwner {
+        require(balanceOf(msg.sender, CHIPS) >= _amount, "Not enough CHIPS");
+
+        // Transfer the CHIPS from the owner to the contract
+        safeTransferFrom(msg.sender, address(this), CHIPS, _amount, "");
     }
 
     function setDealerStep(uint256 newStep) public onlyOwner {
@@ -594,5 +605,9 @@ contract Aiamond is
         uint256[] memory values
     ) internal override(ERC1155, ERC1155Pausable, ERC1155Supply) {
         super._update(from, to, ids, values);
+    }
+
+    function supportsInterface(bytes4 interfaceId) public view override(ERC1155, ERC1155Holder) returns (bool) {
+        return super.supportsInterface(interfaceId);
     }
 }
