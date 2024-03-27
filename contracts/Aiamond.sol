@@ -458,7 +458,7 @@ contract Aiamond is
         require(balanceOf(msg.sender, CHIPS) >= _amount, "Not enough CHIPS");
 
         // Transfer the CHIPS from the owner to the contract
-        safeTransferFrom(msg.sender, address(this), CHIPS, _amount, "");
+        _safeTransferFrom(msg.sender, address(this), CHIPS, _amount, "");
 
         // Add the CHIPS to the NFT
         nftBalances[_nftId] += _amount;
@@ -533,7 +533,7 @@ contract Aiamond is
         nftBalances[_nftId] = 0;
 
         // Transfer the CHIPS tokens to the sender
-        safeTransferFrom(address(this), msg.sender, CHIPS, payout, "");
+        _safeTransferFrom(address(this), msg.sender, CHIPS, payout, "");
     }
 
     function getRevealedGuessesForNft(
