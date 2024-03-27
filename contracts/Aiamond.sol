@@ -8,7 +8,13 @@ import "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Pausable.sol";
 import "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Burnable.sol";
 
 /// @custom:security-contact info@aiamond.com
-contract Aiamond is ERC1155, Ownable, ERC1155Supply, ERC1155Pausable, ERC1155Burnable {
+contract Aiamond is
+    ERC1155,
+    Ownable,
+    ERC1155Supply,
+    ERC1155Pausable,
+    ERC1155Burnable
+{
     uint256 public constant CHIPS = 0;
     uint256 public constant FIRST_DEALER_NFT_ID = 1;
     uint256 public constant LAST_DEALER_NFT_ID = 100;
@@ -25,10 +31,32 @@ contract Aiamond is ERC1155, Ownable, ERC1155Supply, ERC1155Pausable, ERC1155Bur
         address tokenAddress,
         // Timestamp of the guess
         uint256 timestamp,
-        // Price of the guess
-        uint256 price,
         // Initial price of the token
-        uint256 initialPrice
+        uint256 initialPrice,
+        // ID of the guess
+        uint256 guessId,
+        // needed deposit for revealing the guess
+        uint256 neededDeposit
+    );
+
+    // Event to indicate a guess is revealed
+    event GuessRevealedToPlayer(
+        // Address of the NFT the guess is about
+        uint256 indexed nftId,
+        // ID of the guess
+        uint256 indexed guessId,
+        // Address of the player who revealed the guess
+        address player,
+        // Address of the token the guess is about
+        address tokenAddress,
+        // Timestamp of the guess
+        uint256 timestamp,
+        // Initial price of the token
+        uint256 initialPrice,
+        // Address of the dealer who made the guess
+        uint256 dealer,
+        // needed deposit for revealing the guess
+        uint256 neededDeposit
     );
 
     // Event to indicate a price is revealed
@@ -40,23 +68,19 @@ contract Aiamond is ERC1155, Ownable, ERC1155Supply, ERC1155Pausable, ERC1155Bur
         // Revealed price
         uint256 price,
         // Initial guess price
-        uint256 initialPrice
-    );
-
-    // Event to indicate a guess is revealed to a player
-    event GuessRevealedToPlayer(
-        // Address of the dealer who revealed the guess
-        address indexed dealer,
-        // Address of the player who paid for the reveal
-        address indexed player,
-        // Address of the token the guess is about
-        address tokenAddress,
-        // Timestamp of the guess
-        uint256 timestamp,
-        // Price of the guess
-        uint256 price,
-        // Initial guess price
-        uint256 initialPrice
+        uint256 initialPrice,
+        // Guessed price
+        uint256 guessedPrice,
+        // Flag indicating if the guess is correct
+        bool isCorrect,
+        // Absolute difference between the initial and end prices
+        uint256 difference,
+        // Multiplier based on the difference
+        uint256 multiplier,
+        // Address of the NFT the guess is about
+        uint256 nftId,
+        // Total deposited amount
+        uint256 totalDeposited
     );
 
     // Set the maximum supply of tokens
@@ -69,7 +93,7 @@ contract Aiamond is ERC1155, Ownable, ERC1155Supply, ERC1155Pausable, ERC1155Bur
     uint256 public lastDealerTokenId = 0;
     uint256 public lastPlayerTokenId = 100;
 
-    // keeping trac of dealer activities
+    // keeping track of dealer activities
     struct NftInfo {
         Guess[] guesses;
         uint256 correctGuesses;
@@ -79,6 +103,7 @@ contract Aiamond is ERC1155, Ownable, ERC1155Supply, ERC1155Pausable, ERC1155Bur
     // Define a struct to represent a guess
     struct Guess {
         uint256 dealer;
+        uint256[] playersParticipating;
         mapping(uint256 => uint256) players;
         address tokenAddress;
         uint256 timestamp;
@@ -89,6 +114,7 @@ contract Aiamond is ERC1155, Ownable, ERC1155Supply, ERC1155Pausable, ERC1155Bur
         bool isCorrect;
         bytes32 guessHash;
         bool revealed;
+        uint256 neededDeposit;
     }
 
     // Define a struct to represent a price reveal
@@ -116,36 +142,37 @@ contract Aiamond is ERC1155, Ownable, ERC1155Supply, ERC1155Pausable, ERC1155Bur
     // Add this state variable to the contract
     uint256 public playerDeposit = 100;
 
-    // Keep track of the price reveals
-    PriceReveal[] public priceReveals;
-
-    // Map a token address and a timestamp to a price
-    mapping(address => mapping(uint256 => uint256)) public revealedPrices;
-
-    constructor(address initialOwner)
-        ERC1155("https://aiamond.com/api/token/{id}.json")
-        Ownable(initialOwner)
-    {
+    constructor(
+        address initialOwner
+    ) ERC1155("https://aiamond.com/api/token/{id}.json") Ownable(initialOwner) {
         _mint(initialOwner, CHIPS, MAX_SUPPLY, "");
-
     }
 
     function setURI(string memory newuri) public onlyOwner {
         _setURI(newuri);
     }
 
-    function mintDealer() public whenNotPaused payable {
-        require(lastDealerTokenId <= LAST_DEALER_NFT_ID, "All DEALER tokens have been minted");
+    function mintDealer() public payable whenNotPaused {
+        require(
+            lastDealerTokenId <= LAST_DEALER_NFT_ID,
+            "All DEALER tokens have been minted"
+        );
         mintToken(++lastDealerTokenId, dealerNFTPrice);
     }
 
-    function mintPlayer() public whenNotPaused payable {
-        require(lastPlayerTokenId <= LAST_PLAYER_NFT_ID, "All PLAYER tokens have been minted");
+    function mintPlayer() public payable whenNotPaused {
+        require(
+            lastPlayerTokenId <= LAST_PLAYER_NFT_ID,
+            "All PLAYER tokens have been minted"
+        );
         mintToken(++lastPlayerTokenId, playerNFTPrice);
     }
 
     function mintToken(uint256 tokenId, uint256 tokenPrice) internal {
-        require(msg.value >= tokenPrice, "Not enough Ether sent for minting a token");
+        require(
+            msg.value >= tokenPrice,
+            "Not enough Ether sent for minting a token"
+        );
 
         // Transfer the payment to the contract owner
         payable(owner()).transfer(msg.value);
@@ -154,9 +181,11 @@ contract Aiamond is ERC1155, Ownable, ERC1155Supply, ERC1155Pausable, ERC1155Bur
         _mint(msg.sender, tokenId, 1, "");
 
         // Double the token price at different steps for dealer and player tokens
-        if (tokenId <= LAST_DEALER_NFT_ID && tokenId % dealerStep == 0) { // Dealer tokens
+        if (tokenId <= LAST_DEALER_NFT_ID && tokenId % dealerStep == 0) {
+            // Dealer tokens
             dealerNFTPrice *= 2;
-        } else if (tokenId > LAST_DEALER_NFT_ID && tokenId % playerStep == 0) { // Player tokens
+        } else if (tokenId > LAST_DEALER_NFT_ID && tokenId % playerStep == 0) {
+            // Player tokens
             playerNFTPrice *= 2;
         }
     }
@@ -164,16 +193,30 @@ contract Aiamond is ERC1155, Ownable, ERC1155Supply, ERC1155Pausable, ERC1155Bur
     // START DEALER functions
 
     // Add a function for the dealer to add a guess
-    function addGuess(bytes32 _guessHash, uint256 _nftId, address _tokenAddress, uint256 _timestamp, uint256 _price, uint256 _initialPrice) public whenNotPaused returns (uint256) {
+    function addGuess(
+        bytes32 _guessHash,
+        uint256 _nftId,
+        address _tokenAddress,
+        uint256 _timestamp,
+        uint256 _initialPrice,
+        uint256 _neededDeposit
+    ) public whenNotPaused returns (uint256) {
         // Check if the sender owns the NFT
         bool isDealer = false;
-        if (FIRST_DEALER_NFT_ID <= _nftId && _nftId <= LAST_DEALER_NFT_ID && balanceOf(msg.sender, _nftId) > 0) {
+        if (
+            FIRST_DEALER_NFT_ID <= _nftId &&
+            _nftId <= LAST_DEALER_NFT_ID &&
+            balanceOf(msg.sender, _nftId) > 0
+        ) {
             isDealer = true;
         }
         require(isDealer, "Only DEALER NFT owners can make a guess");
 
         // Check if the sender has enough tokens of ID 0
-        require(balanceOf(msg.sender, 0) >= dealerGuessPrice, "Not enough tokens to make a guess");
+        require(
+            balanceOf(msg.sender, 0) >= dealerGuessPrice,
+            "Not enough tokens to make a guess"
+        );
 
         // transfer the dealerGuessPrice to the owner
         safeTransferFrom(msg.sender, owner(), 0, dealerGuessPrice, "");
@@ -185,11 +228,20 @@ contract Aiamond is ERC1155, Ownable, ERC1155Supply, ERC1155Pausable, ERC1155Bur
         newGuess.dealer = _nftId;
         newGuess.tokenAddress = _tokenAddress;
         newGuess.timestamp = _timestamp;
-        newGuess.guessedPrice = _price;
+        newGuess.guessHash = _guessHash;
         newGuess.initialPrice = _initialPrice;
         newGuess.isPriceRevealed = false;
+        newGuess.neededDeposit = _neededDeposit;
 
-        emit GuessAdded(msg.sender, _guessHash, _tokenAddress, _timestamp, _price, _initialPrice);
+        emit GuessAdded(
+            msg.sender,
+            _guessHash,
+            _tokenAddress,
+            _timestamp,
+            _initialPrice,
+            guessId,
+            _neededDeposit
+        );
 
         return guessId;
     }
@@ -199,28 +251,62 @@ contract Aiamond is ERC1155, Ownable, ERC1155Supply, ERC1155Pausable, ERC1155Bur
     // START PLAYER functions
 
     // Player pays to get a guess revealed
-    function revealGuessToPlayer(uint256 _nftId, uint256 _guessId) public whenNotPaused {
-
+    function revealGuessToPlayer(
+        uint256 _nftId,
+        uint256 _guessId
+    ) public whenNotPaused {
         // Check if the sender owns the NFT
         bool isPlayer = false;
-        if (FIRST_PLAYER_NFT_ID <= _nftId && _nftId <= LAST_PLAYER_NFT_ID && balanceOf(msg.sender, _nftId) > 0) {
+        if (
+            FIRST_PLAYER_NFT_ID <= _nftId &&
+            _nftId <= LAST_PLAYER_NFT_ID &&
+            balanceOf(msg.sender, _nftId) > 0
+        ) {
             isPlayer = true;
         }
         require(isPlayer, "Only PLAYER NFT owners can reveal a guess");
 
         // Get the guess
-        require(_guessId < nftInfo[_nftId].guesses.length, "Guess does not exist");
+        require(
+            _guessId < nftInfo[_nftId].guesses.length,
+            "Guess does not exist"
+        );
         Guess storage guess = nftInfo[_nftId].guesses[_guessId];
 
         // Check if the guess has already been revealed by the player
-        require(guess.players[_nftId] == 0, "This guess has already been revealed");
-        
-        require(balanceOf(msg.sender, 0) >= playerRevealPrice + playerDeposit, "Not enough tokens to reveal a guess and make a deposit");
-        
-        safeTransferFrom(msg.sender, address(this), 0, playerDeposit, ""); // Transfer the deposit to the contract
-        safeTransferFrom(msg.sender, owner(), 0, playerRevealPrice, ""); // Transfer the reveal price to the owner
- 
-        guess.players[_nftId] = playerDeposit;
+        require(
+            guess.players[_nftId] == 0,
+            "This guess has already been revealed"
+        );
+
+        require(
+            balanceOf(msg.sender, CHIPS) >=
+                playerRevealPrice + guess.neededDeposit,
+            "Not enough tokens to reveal a guess and make a deposit"
+        );
+
+        safeTransferFrom(
+            msg.sender,
+            address(this),
+            CHIPS,
+            guess.neededDeposit,
+            ""
+        ); // Transfer the deposit to the contract
+        safeTransferFrom(msg.sender, owner(), CHIPS, playerRevealPrice, ""); // Transfer the reveal price to the owner
+
+        guess.players[_nftId] = guess.neededDeposit;
+        guess.playersParticipating.push(_nftId);
+
+        emit GuessRevealedToPlayer(
+            _nftId,
+            _guessId,
+            msg.sender,
+            guess.tokenAddress,
+            guess.timestamp,
+            guess.initialPrice,
+            guess.dealer,
+            guess.neededDeposit
+        );
     }
 
     // END PLAYER functions
@@ -235,87 +321,100 @@ contract Aiamond is ERC1155, Ownable, ERC1155Supply, ERC1155Pausable, ERC1155Bur
         playerRevealPrice = _price;
     }
 
-
     // Reveal price for guess
-    function revealPriceForGuess(uint256 _nftId, address _tokenAddress, uint256 _timestamp, uint256 _price) public onlyOwner {
-        NftInfo storage nft = nftInfo[_nftId];
+    function revealPriceForGuess(
+        uint256 _dealerNftId,
+        uint256 _guessId,
+        uint256 _endPrice,
+        uint256 _guessedPrice,
+        uint256 _nonce
+    ) public onlyOwner {
+        NftInfo storage nft = nftInfo[_dealerNftId];
+        Guess storage guess = nft.guesses[_guessId];
 
-        // Loop through all the guesses of the NFT
-        for (uint i = 0; i < nft.guesses.length; i++) {
-            Guess storage guess = nft.guesses[i];
+        // Check if the guess has already been revealed
+        require(
+            !guess.isPriceRevealed,
+            "Price for this guess has already been revealed"
+        );
 
-            // If the guess matches the given tokenAddress and timestamp
-            if (guess.tokenAddress == _tokenAddress && guess.timestamp == _timestamp) {
-                // Reveal the price for this guess
-                guess.isPriceRevealed = true;
-                guess.endPrice = _price;
+        // Check if the _guessedPrice and _nonce create the correct hash
+        require(
+            keccak256(abi.encodePacked(_guessedPrice, _nonce)) ==
+                guess.guessHash,
+            "Guessed price and nonce do not match the hash"
+        );
 
-                // Calculate the absolute difference
-                uint256 difference = guess.initialPrice > _price ? guess.initialPrice - _price : _price - guess.initialPrice;
+        // Reveal the price for this guess
+        guess.isPriceRevealed = true;
+        guess.endPrice = _endPrice;
+        guess.guessedPrice = _guessedPrice;
 
-                // Calculate the multiplier
-                uint256 multiplier = difference / guess.initialPrice;
+        // Calculate the absolute difference
+        uint256 difference = guess.initialPrice > _endPrice
+            ? guess.initialPrice - _endPrice
+            : _endPrice - guess.initialPrice;
 
-                // Flag the guess as correct or incorrect based on the revealed price 
-                if (keccak256(abi.encodePacked(_price)) == guess.guessHash) {
-                    guess.isCorrect = true;
-                    nft.correctGuesses += multiplier; // make the NFT better
-                } else {
-                    guess.isCorrect = false;
-                    if (nft.correctGuesses > 0) {
-                        nft.correctGuesses -= multiplier; // make the NFT worse
-                    }
-                }
+        // Calculate the multiplier
+        uint256 multiplier = difference / guess.initialPrice;
 
-                // If there are any pending deposits for this guess, transfer them now
-                if (guess.players.length > 0) {
-                    for (uint pi = 0; pi < guess.players.length; pi++) {
-                        uint256 playerNftId = guess.players[pi];
-                        if (guess.guessedPrice <= _price) {
-                            nftBalances[_nftId] += playerNftId;
-                        } else {
-                            nftBalances[playerNftId] += playerNftId;
-                        }
-
-                        delete guess.players[pi];
-                    }
-
-                    // Clear the pending deposit
-                    delete guess.players;
-                }
-
-                // Emit the PriceRevealed event
-                emit PriceRevealed(guess.tokenAddress, guess.timestamp, _price, guess.initialPrice, guess.guessedPrice, guess.isCorrect);
-            
-                delete guess;
+        // Flag the guess as correct or incorrect based on the revealed price
+        if (guess.guessedPrice <= _endPrice) {
+            guess.isCorrect = true;
+            nft.correctGuesses += multiplier; // make the NFT better
+        } else {
+            guess.isCorrect = false;
+            if (nft.correctGuesses > 0) {
+                nft.correctGuesses -= multiplier; // make the NFT worse
             }
         }
-    }
 
-    // Create a function to change the playerDeposit
-    function setPlayerDeposit(uint256 _newDeposit) public onlyOwner {
-        // Only allow the owner to change the playerDeposit
-        require(msg.sender == owner(), "Only the owner can change the playerDeposit");
+        // If there are any pending deposits for this guess, transfer them now
+        uint256 totalDeposited = 0;
+        for (uint pi = 0; pi < guess.playersParticipating.length; pi++) {
+            uint256 playerNftId = guess.playersParticipating[pi];
+            uint256 playerDeposited = guess.players[playerNftId];
+            if (guess.guessedPrice <= _endPrice) {
+                nftBalances[_dealerNftId] += playerDeposited;
+            } else {
+                nftBalances[playerNftId] += playerDeposited;
+            }
+            totalDeposited += playerDeposited;
 
-        // Update the playerDeposit
-        playerDeposit = _newDeposit;
+            guess.players[pi] = 0; // Set the deposit to 0
+        }
+
+        // Emit the PriceRevealed event
+        emit PriceRevealed(
+            guess.tokenAddress,
+            guess.timestamp,
+            _endPrice,
+            guess.initialPrice,
+            guess.guessedPrice,
+            guess.isCorrect,
+            difference,
+            multiplier,
+            _dealerNftId,
+            totalDeposited
+        );
     }
 
     // Function to update the token prices
-    function updateTokenPrices(uint256 _newDealerNFTPrice, uint256 _newPlayerNFTPrice) public onlyOwner {
+    function updateTokenPrices(
+        uint256 _newDealerNFTPrice,
+        uint256 _newPlayerNFTPrice
+    ) public onlyOwner {
         dealerNFTPrice = _newDealerNFTPrice;
         playerNFTPrice = _newPlayerNFTPrice;
     }
 
     // Function to update the dealer guess price and player reveal price
-    function updatePrices(uint256 _newDealerGuessPrice, uint256 _newPlayerRevealPrice) public onlyOwner {
+    function updatePrices(
+        uint256 _newDealerGuessPrice,
+        uint256 _newPlayerRevealPrice
+    ) public onlyOwner {
         dealerGuessPrice = _newDealerGuessPrice;
         playerRevealPrice = _newPlayerRevealPrice;
-    }
-
-    // Function to update the player deposit
-    function updatePlayerDeposit(uint256 _newDeposit) public onlyOwner {
-        playerDeposit = _newDeposit;
     }
 
     // Function to update the URI of the tokens
@@ -330,7 +429,10 @@ contract Aiamond is ERC1155, Ownable, ERC1155Supply, ERC1155Pausable, ERC1155Bur
 
     // Function to withdraw the contract balance
     function withdrawBalance() public onlyOwner {
-        require(payable(owner()).send(address(this).balance), "Failed to send Ether");
+        require(
+            payable(owner()).send(address(this).balance),
+            "Failed to send Ether"
+        );
     }
 
     function withdrawChips() public onlyOwner {
@@ -358,22 +460,29 @@ contract Aiamond is ERC1155, Ownable, ERC1155Supply, ERC1155Pausable, ERC1155Bur
     }
 
     // Function to change correctGuesses in a dealerInfo entry
-    function setCorrectGuesses(address dealer, uint256 correctGuesses) public onlyOwner {
-        NftInfo storage dealerEntry = nftInfo[dealer];
+    function setCorrectGuesses(
+        uint256 dealerNftId,
+        uint256 correctGuesses
+    ) public onlyOwner {
+        NftInfo storage dealerEntry = nftInfo[dealerNftId];
         dealerEntry.correctGuesses = correctGuesses;
     }
 
-    function mint(address account, uint256 id, uint256 amount, bytes memory data)
-        public
-        onlyOwner
-    {
+    function mint(
+        address account,
+        uint256 id,
+        uint256 amount,
+        bytes memory data
+    ) public onlyOwner {
         _mint(account, id, amount, data);
     }
 
-    function mintBatch(address to, uint256[] memory ids, uint256[] memory amounts, bytes memory data)
-        public
-        onlyOwner
-    {
+    function mintBatch(
+        address to,
+        uint256[] memory ids,
+        uint256[] memory amounts,
+        bytes memory data
+    ) public onlyOwner {
         _mintBatch(to, ids, amounts, data);
     }
 
@@ -383,18 +492,45 @@ contract Aiamond is ERC1155, Ownable, ERC1155Supply, ERC1155Pausable, ERC1155Bur
 
     // Function for the holder of an NFT to withdraw their funds
     function withdrawFromNft(uint256 _nftId) public {
-        require(balanceOf(msg.sender, _nftId) > 0 || msg.sender == owner(), "NFT does not exist or sender is not the owner");
+        require(
+            balanceOf(msg.sender, _nftId) > 0 || msg.sender == owner(),
+            "NFT does not exist or sender is not the owner"
+        );
         require(nftBalances[_nftId] > 0, "No funds to withdraw");
+
         uint256 payout = nftBalances[_nftId];
         nftBalances[_nftId] = 0;
-        payable(msg.sender).transfer(payout);
+
+        // Transfer the CHIPS tokens to the sender
+        safeTransferFrom(address(this), msg.sender, 0, payout, "");
     }
 
-    function getRevealedGuessesForNft(uint256 _nftId) public view returns (uint256[] memory, address[] memory, uint256[] memory, uint256[] memory) {
+    function getRevealedGuessesForNft(
+        uint256 _nftId
+    )
+        public
+        view
+        returns (
+            uint256[] memory,
+            uint256[] memory,
+            uint256[] memory,
+            uint256[] memory,
+            uint256[] memory
+        )
+    {
         // Initialize arrays to store the properties of the revealed guesses
-        uint256[] memory guessIds = new uint256[](nftInfo[_nftId].guesses.length);
-        address[] memory playerAddresses = new address[](nftInfo[_nftId].guesses.length);
-        uint256[] memory timestamps = new uint256[](nftInfo[_nftId].guesses.length);
+        uint256[] memory guessIds = new uint256[](
+            nftInfo[_nftId].guesses.length
+        );
+        uint256[] memory participants = new uint256[](
+            nftInfo[_nftId].guesses.length
+        );
+        uint256[] memory deposits = new uint256[](
+            nftInfo[_nftId].guesses.length
+        );
+        uint256[] memory timestamps = new uint256[](
+            nftInfo[_nftId].guesses.length
+        );
         uint256[] memory prices = new uint256[](nftInfo[_nftId].guesses.length);
 
         // Iterate over the guesses of the NFT
@@ -403,24 +539,27 @@ contract Aiamond is ERC1155, Ownable, ERC1155Supply, ERC1155Pausable, ERC1155Bur
             // If the guess is revealed, add its properties to the arrays
             if (guess.isPriceRevealed) {
                 guessIds[i] = i;
-                playerAddresses[i] = guess.player;
+                participants[i] += 1;
+                deposits[i] = guess.players[_nftId];
                 timestamps[i] = guess.timestamp;
                 prices[i] = guess.endPrice;
             }
         }
 
         // Return the arrays
-        return (guessIds, playerAddresses, timestamps, prices);
+        return (guessIds, participants, deposits, timestamps, prices);
     }
 
     // END dApp functions
 
     // The following functions are overrides required by Solidity.
 
-    function _update(address from, address to, uint256[] memory ids, uint256[] memory values)
-        internal
-        override(ERC1155, ERC1155Pausable, ERC1155Supply)
-    {
+    function _update(
+        address from,
+        address to,
+        uint256[] memory ids,
+        uint256[] memory values
+    ) internal override(ERC1155, ERC1155Pausable, ERC1155Supply) {
         super._update(from, to, ids, values);
     }
 }
