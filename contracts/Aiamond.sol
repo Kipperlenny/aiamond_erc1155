@@ -29,6 +29,8 @@ contract Aiamond is
         bytes32 guessHash,
         // Address of the token the guess is about
         address tokenAddress,
+        // Chain ID of the token
+        uint256 chainId,
         // Timestamp of the guess
         uint256 timestamp,
         // Initial price of the token
@@ -73,10 +75,6 @@ contract Aiamond is
         uint256 guessedPrice,
         // Flag indicating if the guess is correct
         bool isCorrect,
-        // Absolute difference between the initial and end prices
-        uint256 difference,
-        // Multiplier based on the difference
-        uint256 multiplier,
         // Address of the NFT the guess is about
         uint256 nftId,
         // Total deposited amount
@@ -106,6 +104,7 @@ contract Aiamond is
         uint256[] playersParticipating;
         mapping(uint256 => uint256) players;
         address tokenAddress;
+        uint256 chainId;
         uint256 timestamp;
         uint256 endPrice;
         uint256 guessedPrice;
@@ -197,6 +196,7 @@ contract Aiamond is
         bytes32 _guessHash,
         uint256 _nftId,
         address _tokenAddress,
+        uint256 _chainId,
         uint256 _timestamp,
         uint256 _initialPrice,
         uint256 _neededDeposit
@@ -219,7 +219,7 @@ contract Aiamond is
         );
 
         // transfer the dealerGuessPrice to the owner
-        safeTransferFrom(msg.sender, owner(), 0, dealerGuessPrice, "");
+        safeTransferFrom(msg.sender, owner(), CHIPS, dealerGuessPrice, "");
 
         nftInfo[_nftId].guesses.push();
         uint256 guessId = nftInfo[_nftId].guesses.length - 1;
@@ -228,6 +228,7 @@ contract Aiamond is
         newGuess.dealer = _nftId;
         newGuess.tokenAddress = _tokenAddress;
         newGuess.timestamp = _timestamp;
+        newGuess.chainId = _chainId;
         newGuess.guessHash = _guessHash;
         newGuess.initialPrice = _initialPrice;
         newGuess.isPriceRevealed = false;
@@ -237,6 +238,7 @@ contract Aiamond is
             msg.sender,
             _guessHash,
             _tokenAddress,
+            _chainId,
             _timestamp,
             _initialPrice,
             guessId,
@@ -350,27 +352,47 @@ contract Aiamond is
         guess.endPrice = _endPrice;
         guess.guessedPrice = _guessedPrice;
 
-        // Calculate the absolute difference
-        uint256 difference = guess.initialPrice > _endPrice
-            ? guess.initialPrice - _endPrice
-            : _endPrice - guess.initialPrice;
-
-        // Calculate the multiplier
-        uint256 multiplier = difference / guess.initialPrice;
-
-        // Flag the guess as correct or incorrect based on the revealed price
-        if (guess.guessedPrice <= _endPrice) {
-            guess.isCorrect = true;
-            nft.correctGuesses += multiplier; // make the NFT better
-        } else {
-            guess.isCorrect = false;
-            if (nft.correctGuesses > 0) {
-                nft.correctGuesses -= multiplier; // make the NFT worse
-            }
-        }
+        // Calculate multiplier and update correct guesses
+        calculateAndUpdateGuesses(guess, nft, _endPrice);
 
         // If there are any pending deposits for this guess, transfer them now
-        uint256 totalDeposited = 0;
+        uint256 totalDeposited = transferDeposits(guess, _dealerNftId, _endPrice);
+
+        // Emit the PriceRevealed event
+        emit PriceRevealed(
+            guess.tokenAddress,
+            guess.timestamp,
+            _endPrice,
+            guess.initialPrice,
+            guess.guessedPrice,
+            guess.isCorrect,
+            _dealerNftId,
+            totalDeposited
+        );
+    }
+
+    // Calculate multiplier and update correct guesses
+    function calculateAndUpdateGuesses(
+        Guess storage guess,
+        NftInfo storage nft,
+        uint256 _endPrice
+    ) internal {
+        // Calculate the absolute difference and the multiplier
+        uint256 multiplier = (guess.initialPrice > _endPrice
+            ? guess.initialPrice - _endPrice
+            : _endPrice - guess.initialPrice) / guess.initialPrice;
+
+        // Flag the guess as correct or incorrect based on the revealed price
+        guess.isCorrect = guess.guessedPrice <= _endPrice;
+        if (guess.isCorrect) {
+            nft.correctGuesses += multiplier; // make the NFT better
+        } else if (nft.correctGuesses > 0) {
+            nft.correctGuesses -= multiplier; // make the NFT worse
+        }
+    }
+
+    // Transfer deposits for a guess
+    function transferDeposits(Guess storage guess, uint256 _dealerNftId, uint256 _endPrice) internal returns (uint256 totalDeposited) {
         for (uint pi = 0; pi < guess.playersParticipating.length; pi++) {
             uint256 playerNftId = guess.playersParticipating[pi];
             uint256 playerDeposited = guess.players[playerNftId];
@@ -383,20 +405,7 @@ contract Aiamond is
 
             guess.players[pi] = 0; // Set the deposit to 0
         }
-
-        // Emit the PriceRevealed event
-        emit PriceRevealed(
-            guess.tokenAddress,
-            guess.timestamp,
-            _endPrice,
-            guess.initialPrice,
-            guess.guessedPrice,
-            guess.isCorrect,
-            difference,
-            multiplier,
-            _dealerNftId,
-            totalDeposited
-        );
+        return totalDeposited;
     }
 
     // Function to update the token prices
@@ -436,9 +445,20 @@ contract Aiamond is
     }
 
     function withdrawChips() public onlyOwner {
-        uint256 balance = balanceOf(address(this), 0);
+        uint256 balance = balanceOf(address(this), CHIPS);
         require(balance > 0, "No CHIPS to withdraw");
-        safeTransferFrom(address(this), owner(), 0, balance, "");
+        safeTransferFrom(address(this), owner(), CHIPS, balance, "");
+    }
+
+    // Function to add CHIPS to an NFT (for testing purposes)
+    function addChipsToNft(uint256 _nftId, uint256 _amount) public onlyOwner {
+        require(balanceOf(msg.sender, CHIPS) >= _amount, "Not enough CHIPS");
+
+        // Transfer the CHIPS from the owner to the contract
+        safeTransferFrom(msg.sender, address(this), CHIPS, _amount, "");
+
+        // Add the CHIPS to the NFT
+        nftBalances[_nftId] += _amount;
     }
 
     function setDealerStep(uint256 newStep) public onlyOwner {
@@ -502,7 +522,7 @@ contract Aiamond is
         nftBalances[_nftId] = 0;
 
         // Transfer the CHIPS tokens to the sender
-        safeTransferFrom(address(this), msg.sender, 0, payout, "");
+        safeTransferFrom(address(this), msg.sender, CHIPS, payout, "");
     }
 
     function getRevealedGuessesForNft(
@@ -548,6 +568,19 @@ contract Aiamond is
 
         // Return the arrays
         return (guessIds, participants, deposits, timestamps, prices);
+    }
+
+    // Get the ID of the last guess added for a given NFT
+    function getGuessId(uint256 _nftId) public view returns (uint256) {
+        require(nftInfo[_nftId].guesses.length > 0, "No guesses for this NFT");
+        return nftInfo[_nftId].guesses.length - 1;
+    }
+
+    // Get the details of a guess
+    function getGuess(uint256 _nftId, uint256 _guessId) public view returns (uint256, address, uint256, bytes32, uint256, bool, uint256) {
+        require(_guessId < nftInfo[_nftId].guesses.length, "Invalid guess ID");
+        Guess storage guess = nftInfo[_nftId].guesses[_guessId];
+        return (guess.dealer, guess.tokenAddress, guess.timestamp, guess.guessHash, guess.initialPrice, guess.isPriceRevealed, guess.neededDeposit);
     }
 
     // END dApp functions
