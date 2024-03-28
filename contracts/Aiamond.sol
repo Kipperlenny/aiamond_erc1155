@@ -63,8 +63,10 @@ contract Aiamond is
     uint256 public constant MAX_CHIPS_SUPPLY = 1000000000;
 
     /// @notice Max number of guesses each dealer NFT can create
-    mapping(uint256 => uint256) public dealerGuessCount;
-    uint256 public maxGuesses = 10; // Set an initial limit
+    mapping(uint256 _dealerNftId => uint256 _guessCount) public dealerGuessCount;
+
+    /// @notice initial Max number of guesses each dealer NFT can create
+    uint256 public maxGuesses = 10;
 
     /// @notice Price for dealer NFTs
     uint256 public dealerNFTPrice = 0.001 ether;
@@ -85,10 +87,10 @@ contract Aiamond is
     uint256 public playerRevealPrice = 10;
 
     /// @notice Mapping from dealerNftId to guess price
-    mapping(uint256 => uint256) public specialGuessPrices;
+    mapping(uint256 _nftId => uint256 _specialGuessPrice) public specialGuessPrices;
 
     /// @notice Mapping from dealerNftId to reveal price
-    mapping(uint256 => uint256) public specialRevealPrices;
+    mapping(uint256 _nftId => uint256 _specialRevealPrice) public specialRevealPrices;
 
     /// @param dealer NFT ID of the dealer who made the guess
     /// @param guessHash Hash of the guessed endPrice
@@ -107,7 +109,7 @@ contract Aiamond is
         // Address of the token the guess is about
         address tokenAddress,
         // Chain ID of the token
-        uint256 chainId,
+        uint256 indexed chainId,
         // Timestamp of the guess
         uint256 timestamp,
         // Initial price of the token
@@ -115,7 +117,7 @@ contract Aiamond is
         // ID of the guess
         uint256 guessId,
         // needed deposit for revealing the guess
-        uint256 neededDeposit
+        uint256 indexed neededDeposit
     );
 
     /// @param playerNftId NFT ID of the player who revealed the guess
@@ -129,15 +131,15 @@ contract Aiamond is
     /// @notice Event to indicate a guess is revealed to a player
     event GuessRevealedToPlayer(
         // Player NFT which revealed
-        uint256 indexed playerNftId,
+        uint256 playerNftId,
         // ID of the guess
         uint256 indexed guessId,
         // Guess Dealer NFT ID
-        uint256 dealerNftId,
+        uint256 indexed dealerNftId,
         // Address of the token the guess is about
         address tokenAddress,
         // Chain ID of the token
-        uint256 chainId,
+        uint256 indexed chainId,
         // Timestamp of the guess
         uint256 timestamp,
         // Initial price of the token
@@ -157,7 +159,7 @@ contract Aiamond is
     /// @notice Event to indicate a price is revealed
     event PriceRevealed(
         // Address of the token the price is about
-        address tokenAddress,
+        address indexed tokenAddress,
         // Timestamp of the price reveal
         uint256 timestamp,
         // Revealed endPrice
@@ -167,11 +169,37 @@ contract Aiamond is
         // guessedPrice
         uint256 guessedPrice,
         // Flag indicating if the guess is correct
-        bool isCorrect,
+        bool indexed isCorrect,
         // Address of the NFT the guess is about
-        uint256 dealerNft,
+        uint256 indexed dealerNft,
         // Total deposited amount
         uint256 totalDeposited
+    );
+    
+    /// @param tokenId ID of the token
+    /// @param minter Address of the minter
+    /// @notice Event to indicate a new dealer token is minted
+    event DealerMinted(
+        uint256 indexed tokenId,
+        address indexed minter
+    );
+    
+    /// @param tokenId ID of the token
+    /// @param minter Address of the minter
+    /// @notice Event to indicate a new player token is minted
+    event PlayerMinted(
+        uint256 indexed tokenId,
+        address indexed minter
+    );
+
+    /// @param tokenId ID of the token
+    /// @param payout Amount to withdraw
+    /// @param withdrawer Address of the withdrawer
+    /// @notice Event to indicate a withdrawal from an NFT
+    event WithdrawFromNft(
+        uint256 indexed tokenId, 
+        uint256 payout, 
+        address indexed withdrawer
     );
 
     /// @notice Keep track of the last minted token ID for Dealer token
@@ -185,7 +213,7 @@ contract Aiamond is
         uint256 correctGuesses;
     }
     /// @notice keeping track of dealer activities
-    mapping(uint256 => NftInfo) public nftInfo;
+    mapping(uint256 _nftId => NftInfo nftstruct) public nftInfo;
 
     // Define a struct to represent a guess
     struct Guess {
@@ -206,10 +234,10 @@ contract Aiamond is
     }
 
     /// @notice Mapping from NFT ID to balance
-    mapping(uint256 => uint256) public nftBalances;
+    mapping(uint256 _nftId => uint256 _balance) public nftBalances;
 
     /// @dev make our NFTs unique
-    mapping(uint256 => bool) private _mintedTokens;
+    mapping(uint256 _tokenId => bool _isMinted) private _mintedTokens;
 
     constructor(
         address initialOwner
@@ -229,6 +257,8 @@ contract Aiamond is
             revert AllDealerTokensMinted();
         }
         mintToken(++lastUsedDealerTokenId, dealerNFTPrice);
+
+        emit DealerMinted(lastUsedDealerTokenId, _msgSender());
     }
 
     /// @notice Function to mint a player token
@@ -237,6 +267,8 @@ contract Aiamond is
             revert AllPlayerTokensMinted();
         }
         mintToken(++lastUsedPlayerTokenId, playerNFTPrice);
+        
+        emit PlayerMinted(lastUsedPlayerTokenId, _msgSender());
     }
 
     /// @notice Function to mint a token, only called by mintDealer and mintPlayer
@@ -894,6 +926,8 @@ contract Aiamond is
 
         // Transfer the CHIPS tokens to the sender
         _safeTransferFrom(address(this), _msgSender(), CHIPS, payout, "");
+
+        emit WithdrawFromNft(_nftId, payout, _msgSender());
     }
 
     /// @notice Function to get the balance of an NFT
@@ -1029,6 +1063,10 @@ contract Aiamond is
         return (guess.dealer, guess.playersParticipating, playersDeposits, guess.tokenAddress, guess.chainId, guess.timestamp, guess.guessHash, guess.initialPrice, guess.isPriceRevealed, guess.neededDeposit);
     }
 
+    /// @notice Function to get the number of correct guesses for a dealer NFT
+    /// @param dealerNftId NFT ID of the dealer
+    /// @return guesses Number of correct guesses
+    /// @return correctGuesses Number of correct guesses
     function getNftInfo(uint256 dealerNftId) external view returns (uint256, uint256) {
         NftInfo storage info = nftInfo[dealerNftId];
         return (info.guesses.length, info.correctGuesses);
