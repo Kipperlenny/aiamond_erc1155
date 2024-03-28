@@ -62,9 +62,6 @@ contract Aiamond is
     /// @notice Set the maximum supply of tokens
     uint256 public constant MAX_CHIPS_SUPPLY = 1000000000;
 
-    /// @notice Max number of guesses each dealer NFT can create
-    mapping(uint256 _dealerNftId => uint256 _guessCount) public dealerGuessCount;
-
     /// @notice initial Max number of guesses each dealer NFT can create
     uint256 public maxGuesses = 10;
 
@@ -85,6 +82,9 @@ contract Aiamond is
 
     /// @notice default Price for revealing a guess
     uint256 public playerRevealPrice = 10;
+
+    /// @notice Max number of guesses each dealer NFT can create
+    mapping(uint256 _dealerNftId => uint256 _guessCount) public dealerGuessCount;
 
     /// @notice Mapping from dealerNftId to guess price
     mapping(uint256 _nftId => uint256 _specialGuessPrice) public specialGuessPrices;
