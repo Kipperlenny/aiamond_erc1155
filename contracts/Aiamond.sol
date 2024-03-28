@@ -174,9 +174,6 @@ contract Aiamond is
         uint256 totalDeposited
     );
 
-    /// @notice Keep track of the number of tokens minted
-    uint256 public tokensMinted = 0;
-
     /// @notice Keep track of the last minted token ID for Dealer token
     uint256 public lastUsedDealerTokenId = FIRST_DEALER_NFT_ID - 1;
 
@@ -208,13 +205,6 @@ contract Aiamond is
         uint256 neededDeposit;
     }
 
-    // Define a struct to represent a price reveal
-    struct PriceReveal {
-        address tokenAddress;
-        uint256 timestamp;
-        uint256 price;
-    }
-
     /// @notice Mapping from NFT ID to balance
     mapping(uint256 => uint256) public nftBalances;
 
@@ -229,12 +219,12 @@ contract Aiamond is
 
     /// @notice Function to set the URI for the tokens
     /// @param newuri New URI for the tokens
-    function setURI(string memory newuri) public onlyOwner {
+    function setURI(string memory newuri) external onlyOwner {
         _setURI(newuri);
     }
 
     /// @notice Function to mint a dealer token
-    function mintDealer() public payable whenNotPaused {
+    function mintDealer() external payable whenNotPaused {
         if (lastUsedDealerTokenId >= lastDealerNftId) {
             revert AllDealerTokensMinted();
         }
@@ -242,7 +232,7 @@ contract Aiamond is
     }
 
     /// @notice Function to mint a player token
-    function mintPlayer() public payable whenNotPaused {
+    function mintPlayer() external payable whenNotPaused {
         if (lastUsedPlayerTokenId >= lastPlayerNftId) {
             revert AllPlayerTokensMinted();
         }
@@ -252,8 +242,8 @@ contract Aiamond is
     /// @notice Function to mint a token, only called by mintDealer and mintPlayer
     /// @param tokenId ID of the token to mint
     /// @param tokenPrice Price of the token
-    function mintToken(uint256 tokenId, uint256 tokenPrice) internal {
-        if (msg.sender != owner()) {
+    function mintToken(uint256 tokenId, uint256 tokenPrice) private {
+        if (_msgSender() != owner()) {
             if (msg.value < tokenPrice) {
                 revert NotEnoughEtherForMinting();
             }
@@ -264,7 +254,7 @@ contract Aiamond is
         }
 
         // Mint the token to the user's address
-        safeMint(msg.sender, tokenId, 1, "");
+        safeMint(_msgSender(), tokenId, 1, "");
 
         // Double the token price at different steps for dealer and player tokens
         if (tokenId <= lastDealerNftId && tokenId % dealerStep == 0) {
@@ -294,13 +284,13 @@ contract Aiamond is
         uint256 _timestamp,
         uint256 _initialPrice,
         uint256 _neededDeposit
-    ) public whenNotPaused returns (uint256) {
+    ) external whenNotPaused returns (uint256) {
         // Check if the sender owns the NFT
-        bool isDealer = false;
+        bool isDealer;
         if (
             FIRST_DEALER_NFT_ID <= _nftId &&
             _nftId <= lastDealerNftId &&
-            balanceOf(msg.sender, _nftId) > 0
+            balanceOf(_msgSender(), _nftId) > 0
         ) {
             isDealer = true;
         }
@@ -317,12 +307,12 @@ contract Aiamond is
         uint256 guessPrice = getGuessPrice(_nftId);
 
         // Check if the sender has enough tokens of ID 0
-        if (balanceOf(msg.sender, 0) < guessPrice) {
+        if (balanceOf(_msgSender(), 0) < guessPrice) {
             revert NotEnoughTokensToGuess();
         }
 
         // transfer the guessPrice to the owner
-        safeTransferFrom(msg.sender, owner(), CHIPS, guessPrice, "");
+        safeTransferFrom(_msgSender(), owner(), CHIPS, guessPrice, "");
 
         nftInfo[_nftId].guesses.push();
         uint256 guessId = nftInfo[_nftId].guesses.length - 1;
@@ -338,10 +328,10 @@ contract Aiamond is
         newGuess.neededDeposit = _neededDeposit;
 
         // Increment the guess count for the dealer
-        dealerGuessCount[_nftId]++;
+        ++dealerGuessCount[_nftId];
 
         emit GuessAdded(
-            msg.sender,
+            _msgSender(),
             _guessHash,
             _tokenAddress,
             _chainId,
@@ -366,13 +356,13 @@ contract Aiamond is
         uint256 _playerNftId,
         uint256 _dealerNftId,
         uint256 _guessId
-    ) public whenNotPaused {
+    ) external whenNotPaused {
         // Check if the sender owns the NFT
-        bool isPlayer = false;
+        bool isPlayer;
         if (
             FIRST_PLAYER_NFT_ID <= _playerNftId &&
             _playerNftId <= lastPlayerNftId &&
-            balanceOf(msg.sender, _playerNftId) > 0
+            balanceOf(_msgSender(), _playerNftId) > 0
         ) {
             isPlayer = true;
         }
@@ -394,19 +384,19 @@ contract Aiamond is
 
         uint256 revealPrice = getRevealPrice(_dealerNftId);
 
-        if (balanceOf(msg.sender, CHIPS) < revealPrice + guess.neededDeposit) {
+        if (balanceOf(_msgSender(), CHIPS) < revealPrice + guess.neededDeposit) {
             revert NotEnoughTokensToRevealAndDeposit();
         }
 
         safeTransferFrom(
-            msg.sender,
+            _msgSender(),
             address(this),
             CHIPS,
             guess.neededDeposit,
             ""
         ); // Transfer the deposit to the contract
 
-        safeTransferFrom(msg.sender, owner(), CHIPS, revealPrice, ""); // Transfer the reveal price to the owner
+        safeTransferFrom(_msgSender(), owner(), CHIPS, revealPrice, ""); // Transfer the reveal price to the owner
 
         guess.players[_playerNftId] = guess.neededDeposit;
         guess.playersParticipating.push(_playerNftId);
@@ -429,13 +419,13 @@ contract Aiamond is
 
     /// @notice Function to set the price for dealer NFTs
     /// @param _price New price for dealer NFTs
-    function setDealerGuessPrice(uint256 _price) public onlyOwner {
+    function setDealerGuessPrice(uint256 _price) external onlyOwner {
         dealerGuessPrice = _price;
     }
 
     /// @notice Function to set the price for player NFTs
     /// @param _price New price for player NFTs
-    function setPlayerRevealPrice(uint256 _price) public onlyOwner {
+    function setPlayerRevealPrice(uint256 _price) external onlyOwner {
         playerRevealPrice = _price;
     }
 
@@ -451,7 +441,7 @@ contract Aiamond is
         uint256 _endPrice,
         uint256 _guessedPrice,
         uint256 _nonce
-    ) public onlyOwner {
+    ) external onlyOwner {
         NftInfo storage nft = nftInfo[_dealerNftId];
         Guess storage guess = nft.guesses[_guessId];
 
@@ -477,7 +467,7 @@ contract Aiamond is
         uint256 totalDeposited = transferDeposits(guess, _dealerNftId, _endPrice);
 
         // Decrement the guess count for the dealer
-        dealerGuessCount[_dealerNftId]--;
+        --dealerGuessCount[_dealerNftId];
 
         // Emit the PriceRevealed event
         emit PriceRevealed(
@@ -500,7 +490,7 @@ contract Aiamond is
         Guess storage guess,
         NftInfo storage nft,
         uint256 _endPrice
-    ) internal {
+    ) private {
         // Calculate the absolute difference and the multiplier
         uint256 multiplier = (guess.initialPrice > _endPrice
             ? guess.initialPrice - _endPrice
@@ -520,8 +510,9 @@ contract Aiamond is
     /// @param _dealerNftId NFT ID of the dealer
     /// @param _endPrice The real price at the end
     /// @return totalDeposited Total amount of deposits for this guess
-    function transferDeposits(Guess storage guess, uint256 _dealerNftId, uint256 _endPrice) internal returns (uint256 totalDeposited) {
-        for (uint256 pi = 0; pi < guess.playersParticipating.length; pi++) {
+    function transferDeposits(Guess storage guess, uint256 _dealerNftId, uint256 _endPrice) private returns (uint256 totalDeposited) {
+        uint256 playersLength = guess.playersParticipating.length;
+        for (uint256 pi; pi < playersLength; ++pi) {
             uint256 playerNftId = guess.playersParticipating[pi];
             uint256 playerDeposited = guess.players[playerNftId];
             if (guess.guessedPrice <= _endPrice) {
@@ -543,7 +534,7 @@ contract Aiamond is
     function updateTokenPrices(
         uint256 _newDealerNFTPrice,
         uint256 _newPlayerNFTPrice
-    ) public onlyOwner {
+    ) external onlyOwner {
         dealerNFTPrice = _newDealerNFTPrice;
         playerNFTPrice = _newPlayerNFTPrice;
     }
@@ -554,25 +545,25 @@ contract Aiamond is
     function updatePrices(
         uint256 _newDealerGuessPrice,
         uint256 _newPlayerRevealPrice
-    ) public onlyOwner {
+    ) external onlyOwner {
         dealerGuessPrice = _newDealerGuessPrice;
         playerRevealPrice = _newPlayerRevealPrice;
     }
 
     /// @notice Function to update the URI for the tokens
     /// @param _newURI New URI for the tokens
-    function updateURI(string memory _newURI) public onlyOwner {
+    function updateURI(string memory _newURI) external onlyOwner {
         _setURI(_newURI);
     }
 
     /// @notice Function to update the owner of the contract
     /// @param _newOwner Address of the new owner
-    function updateOwner(address _newOwner) public onlyOwner {
+    function updateOwner(address _newOwner) external onlyOwner {
         transferOwnership(_newOwner);
     }
 
     /// @notice Function to withdraw the balance of the contract
-    function withdrawBalance() public onlyOwner {
+    function withdrawBalance() external onlyOwner {
         (bool success, ) = payable(owner()).call{value: address(this).balance}("");
         if (!success) {
             revert FailedToSendEther();
@@ -583,7 +574,7 @@ contract Aiamond is
     receive() external payable {}
 
     /// @notice Function to withdraw the CHIPS tokens from the contract
-    function withdrawChips() public onlyOwner {
+    function withdrawChips() external onlyOwner {
         uint256 balance = balanceOf(address(this), CHIPS);
         if (balance <= 0) {
             revert NoChipsToWithdraw();
@@ -595,13 +586,13 @@ contract Aiamond is
     /// @notice Function to add CHIPS to an NFT (for testing purposes)
     /// @param _nftId ID of the NFT to add CHIPS to
     /// @param _amount Amount of CHIPS to add
-    function addChipsToNft(uint256 _nftId, uint256 _amount) public onlyOwner {
-        if (balanceOf(msg.sender, CHIPS) < _amount) {
+    function addChipsToNft(uint256 _nftId, uint256 _amount) external onlyOwner {
+        if (balanceOf(_msgSender(), CHIPS) < _amount) {
             revert NotEnoughChips();
         }
 
         // Transfer the CHIPS from the owner to the contract
-        _safeTransferFrom(msg.sender, address(this), CHIPS, _amount, "");
+        _safeTransferFrom(_msgSender(), address(this), CHIPS, _amount, "");
 
         // Add the CHIPS to the NFT
         nftBalances[_nftId] += _amount;
@@ -609,34 +600,34 @@ contract Aiamond is
 
     /// @notice Function to add CHIPS to the contract (for testing purposes)
     /// @param _amount Amount of CHIPS to add
-    function addChipsToContract(uint256 _amount) public onlyOwner {
-        if (balanceOf(msg.sender, CHIPS) < _amount) {
+    function addChipsToContract(uint256 _amount) external onlyOwner {
+        if (balanceOf(_msgSender(), CHIPS) < _amount) {
             revert NotEnoughChips();
         }
 
         // Transfer the CHIPS from the owner to the contract
-        safeTransferFrom(msg.sender, address(this), CHIPS, _amount, "");
+        safeTransferFrom(_msgSender(), address(this), CHIPS, _amount, "");
     }
 
     /// @notice Function to set the newStep for dealer NFTs
     /// @param newStep New step for doubling the price of dealer NFTs
-    function setDealerStep(uint256 newStep) public onlyOwner {
+    function setDealerStep(uint256 newStep) external onlyOwner {
         dealerStep = newStep;
     }
 
     /// @notice Function to set the newStep for player NFTs
     /// @param newStep New step for doubling the price for player NFTs
-    function setPlayerStep(uint256 newStep) public onlyOwner {
+    function setPlayerStep(uint256 newStep) external onlyOwner {
         playerStep = newStep;
     }
 
     /// @notice Function to pause the game
-    function pauseGame() public onlyOwner {
+    function pauseGame() external onlyOwner {
         _pause();
     }
 
     /// @notice Function to resume the game
-    function resumeGame() public onlyOwner {
+    function resumeGame() external onlyOwner {
         _unpause();
     }
 
@@ -646,7 +637,7 @@ contract Aiamond is
     function setCorrectGuesses(
         uint256 dealerNftId,
         uint256 correctGuesses
-    ) public onlyOwner {
+    ) external onlyOwner {
         NftInfo storage dealerEntry = nftInfo[dealerNftId];
         dealerEntry.correctGuesses = correctGuesses;
     }
@@ -657,14 +648,14 @@ contract Aiamond is
     function setDealerGuessCount(
         uint256 dealerNftId,
         uint256 guessCount
-    ) public onlyOwner {
+    ) external onlyOwner {
         dealerGuessCount[dealerNftId] = guessCount;
     }
 
     /// @notice Function to set the balance of an NFT
     /// @param nftId ID of the NFT
     /// @param balance New balance for the NFT
-    function setNftBalance(uint256 nftId, uint256 balance) public onlyOwner {
+    function setNftBalance(uint256 nftId, uint256 balance) external onlyOwner {
         nftBalances[nftId] = balance;
     }
 
@@ -678,7 +669,7 @@ contract Aiamond is
         uint256 id,
         uint256 amount,
         bytes memory data
-    ) public onlyOwner {
+    ) external onlyOwner {
 
         if (id >= FIRST_DEALER_NFT_ID && id <= lastDealerNftId) {
             if (lastUsedDealerTokenId >= lastDealerNftId) {
@@ -710,7 +701,7 @@ contract Aiamond is
         uint256 id,
         uint256 amount,
         bytes memory data
-    ) public onlyOwner {
+    ) external onlyOwner {
         _mint(account, id, amount, data);
     }
 
@@ -724,7 +715,7 @@ contract Aiamond is
         uint256[] memory ids,
         uint256[] memory amounts,
         bytes memory data
-    ) public onlyOwner {
+    ) external onlyOwner {
         uint256 maxDealerTokenId = lastUsedDealerTokenId;
         uint256 maxPlayerTokenId = lastUsedPlayerTokenId;
 
@@ -749,7 +740,7 @@ contract Aiamond is
         uint256[] memory ids,
         uint256[] memory amounts,
         bytes memory data
-    ) public onlyOwner {
+    ) external onlyOwner {
         _mintBatch(to, ids, amounts, data);
     }
 
@@ -758,7 +749,7 @@ contract Aiamond is
     /// @param id token id
     /// @param amount amount to mint
     /// @param data additional data
-    function safeMint(address to, uint256 id, uint256 amount, bytes memory data) internal {
+    function safeMint(address to, uint256 id, uint256 amount, bytes memory data) private {
         if (_mintedTokens[id]) {
             revert TokenAlreadyMinted();
         }
@@ -771,7 +762,7 @@ contract Aiamond is
     /// @param ids token ids
     /// @param amounts amounts to mint
     /// @param data additional data
-    function safeMintBatch(address to, uint256[] memory ids, uint256[] memory amounts, bytes memory data) internal returns (uint256, uint256) {
+    function safeMintBatch(address to, uint256[] memory ids, uint256[] memory amounts, bytes memory data) private returns (uint256, uint256) {
         if (ids.length != amounts.length) {
             revert IdsAndAmountsLengthMustMatch();
         }
@@ -780,7 +771,8 @@ contract Aiamond is
         uint256 maxPlayerTokenId = lastUsedPlayerTokenId;
 
         // First, check all the tokens
-        for (uint256 i = 0; i < ids.length; i++) {
+        uint256 idsLength = ids.length;
+        for (uint256 i; i < idsLength; ++i) {
             uint256 id = ids[i];
 
             if (_mintedTokens[id]) {
@@ -808,7 +800,7 @@ contract Aiamond is
         _mintBatch(to, ids, amounts, data);
 
         // If all the tokens passed the check, mark them as minted
-        for (uint256 i = 0; i < ids.length; i++) {
+        for (uint256 i; i < idsLength; ++i) {
             _mintedTokens[ids[i]] = true;
         }
 
@@ -817,32 +809,32 @@ contract Aiamond is
 
     /// @notice Function to set the last used token ID
     /// @param id ID to set
-    function setLastDealerTokenId(uint256 id) public onlyOwner {
+    function setLastDealerTokenId(uint256 id) external onlyOwner {
         lastUsedDealerTokenId = id;
     }
 
     /// @notice Function to set the last used token ID
     /// @param id ID to set
-    function setLastPlayerTokenId(uint256 id) public onlyOwner {
+    function setLastPlayerTokenId(uint256 id) external onlyOwner {
         lastUsedPlayerTokenId = id;
     }
     
     /// @notice Function to set the last dealer NFT ID
     /// @param _lastDealerNftId ID to set
-    function setLastDealerNftId(uint256 _lastDealerNftId) public onlyOwner {
+    function setLastDealerNftId(uint256 _lastDealerNftId) external onlyOwner {
         lastDealerNftId = _lastDealerNftId;
     }
 
     /// @notice Function to set the last player NFT ID
     /// @param _lastPlayerNftId ID to set
-    function setLastPlayerNftId(uint256 _lastPlayerNftId) public onlyOwner {
+    function setLastPlayerNftId(uint256 _lastPlayerNftId) external onlyOwner {
         lastPlayerNftId = _lastPlayerNftId;
     }
 
     /// @notice Function to set the guess price individually for a dealer NFT
     /// @param dealerNftId NFT ID of the dealer
     /// @param price New price for guessing
-    function setSpecialGuessPrice(uint256 dealerNftId, uint256 price) public onlyOwner {
+    function setSpecialGuessPrice(uint256 dealerNftId, uint256 price) external onlyOwner {
         specialGuessPrices[dealerNftId] = price;
     }
 
@@ -861,7 +853,7 @@ contract Aiamond is
     /// @notice Function to set the reveal price individually for a dealer NFT
     /// @param dealerNftId NFT ID of the dealer
     /// @param price New price for revealing
-    function setSpecialRevealPrice(uint256 dealerNftId, uint256 price) public onlyOwner {
+    function setSpecialRevealPrice(uint256 dealerNftId, uint256 price) external onlyOwner {
         specialRevealPrices[dealerNftId] = price;
     }
 
@@ -889,8 +881,8 @@ contract Aiamond is
 
     /// @notice Function to withdraw the balance of an NFT
     /// @param _nftId ID of the NFT
-    function withdrawFromNft(uint256 _nftId) public {
-        if (balanceOf(msg.sender, _nftId) <= 0 && msg.sender != owner()) {
+    function withdrawFromNft(uint256 _nftId) external {
+        if (balanceOf(_msgSender(), _nftId) <= 0 && _msgSender() != owner()) {
             revert NftDoesNotExistOrSenderNotOwner();
         }
         if (nftBalances[_nftId] <= 0) {
@@ -901,47 +893,47 @@ contract Aiamond is
         nftBalances[_nftId] = 0;
 
         // Transfer the CHIPS tokens to the sender
-        _safeTransferFrom(address(this), msg.sender, CHIPS, payout, "");
+        _safeTransferFrom(address(this), _msgSender(), CHIPS, payout, "");
     }
 
     /// @notice Function to get the balance of an NFT
     /// @param _nftId ID of the NFT
     /// @return balance Balance of the NFT
-    function getNftBalance(uint256 _nftId) public view returns (uint256) {
+    function getNftBalance(uint256 _nftId) external view returns (uint256) {
         return nftBalances[_nftId];
     }
 
     /// @notice Function to get the balance of the contract
     /// @return balance Balance of the contract
-    function getContractBalance() public view returns (uint256) {
+    function getContractBalance() external view returns (uint256) {
         return address(this).balance;
     }
 
     /// @notice Function to get the price for guessing
     /// @param _nftId ID of the NFT
     /// @return price Price for guessing
-    function getGuessPriceForNft(uint256 _nftId) public view returns (uint256) {
+    function getGuessPriceForNft(uint256 _nftId) external view returns (uint256) {
         return getGuessPrice(_nftId);
     }
 
     /// @notice Function to get the price for revealing
     /// @param _nftId ID of the NFT
     /// @return price Price for revealing
-    function getRevealPriceForNft(uint256 _nftId) public view returns (uint256) {
+    function getRevealPriceForNft(uint256 _nftId) external view returns (uint256) {
         return getRevealPrice(_nftId);
     }
 
     /// @notice Function to get the correct guesses for a dealer NFT
     /// @param _nftId ID of the NFT
     /// @return correctGuesses Number of correct guesses
-    function getCorrectGuessesForNft(uint256 _nftId) public view returns (uint256) {
+    function getCorrectGuessesForNft(uint256 _nftId) external view returns (uint256) {
         return nftInfo[_nftId].correctGuesses;
     }
 
     /// @notice Function to get the number of guesses for a dealer NFT
     /// @param _nftId ID of the NFT
     /// @return guessCount Number of guesses
-    function getGuessCountForNft(uint256 _nftId) public view returns (uint256) {
+    function getGuessCountForNft(uint256 _nftId) external view returns (uint256) {
         return nftInfo[_nftId].guesses.length;
     }
 
@@ -952,10 +944,10 @@ contract Aiamond is
     /// @return deposits Deposits for each guess
     /// @return timestamps Timestamps for each guess
     /// @return prices Prices for each guess
-    function getRevealedGuessesForNft(
+     function getRevealedGuessesForNft(
         uint256 _nftId
     )
-        public
+        external
         view
         returns (
             uint256[] memory,
@@ -981,7 +973,8 @@ contract Aiamond is
         uint256[] memory prices = new uint256[](nftInfo[_nftId].guesses.length);
 
         // Iterate over the guesses of the NFT
-        for (uint256 i = 0; i < nftInfo[_nftId].guesses.length; i++) {
+        uint256 guessesLength = nftInfo[_nftId].guesses.length;
+        for (uint256 i; i < guessesLength; ++i) {
             Guess storage guess = nftInfo[_nftId].guesses[i];
             // If the guess is revealed, add its properties to the arrays
             if (guess.isPriceRevealed) {
@@ -1000,7 +993,7 @@ contract Aiamond is
     /// @notice Function to get the number of active guesses for an NFT
     /// @param _nftId ID of the NFT
     /// @return guesses Number of guesses
-    function getGuessId(uint256 _nftId) public view returns (uint256) {
+    function getGuessId(uint256 _nftId) external view returns (uint256) {
         if (nftInfo[_nftId].guesses.length <= 0) {
             revert NoGuessesForThisNft();
         }
@@ -1020,22 +1013,23 @@ contract Aiamond is
     /// @return initialPrice Initial price of the token
     /// @return isPriceRevealed Flag indicating if the price is revealed
     /// @return neededDeposit Deposit needed for revealing the guess
-    function getGuess(uint256 _nftId, uint256 _guessId) public view returns (uint256, uint256[] memory, uint256[] memory, address, uint256, uint256, bytes32, uint256, bool, uint256) {
+    function getGuess(uint256 _nftId, uint256 _guessId) external view returns (uint256, uint256[] memory, uint256[] memory, address, uint256, uint256, bytes32, uint256, bool, uint256) {
         if (_guessId >= nftInfo[_nftId].guesses.length) {
             revert InvalidGuessId();
         }
 
         Guess storage guess = nftInfo[_nftId].guesses[_guessId];
 
-        uint256[] memory playersDeposits = new uint256[](guess.playersParticipating.length);
-        for (uint256 i = 0; i < guess.playersParticipating.length; i++) {
+        uint256 guessPlayersParticipatingLength = guess.playersParticipating.length;
+        uint256[] memory playersDeposits = new uint256[](guessPlayersParticipatingLength);
+        for (uint256 i; i < guessPlayersParticipatingLength; ++i) {
             playersDeposits[i] = guess.players[guess.playersParticipating[i]];
         }
 
         return (guess.dealer, guess.playersParticipating, playersDeposits, guess.tokenAddress, guess.chainId, guess.timestamp, guess.guessHash, guess.initialPrice, guess.isPriceRevealed, guess.neededDeposit);
     }
 
-    function getNftInfo(uint256 dealerNftId) public view returns (uint256, uint256) {
+    function getNftInfo(uint256 dealerNftId) external view returns (uint256, uint256) {
         NftInfo storage info = nftInfo[dealerNftId];
         return (info.guesses.length, info.correctGuesses);
     }
