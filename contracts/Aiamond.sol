@@ -19,9 +19,24 @@ contract Aiamond is
 {
     uint256 public constant CHIPS = 0;
     uint256 public constant FIRST_DEALER_NFT_ID = 1;
-    uint256 public constant LAST_DEALER_NFT_ID = 100;
-    uint256 public constant FIRST_PLAYER_NFT_ID = 101;
+    uint256 public constant LAST_DEALER_NFT_ID = 101;
+    uint256 public constant FIRST_PLAYER_NFT_ID = 102;
     uint256 public constant LAST_PLAYER_NFT_ID = 200101;
+
+    // Set the maximum supply of tokens
+    uint256 public constant MAX_SUPPLY = 1000000;
+
+    // Add these state variables to the contract
+    uint256 public dealerNFTPrice = 0.001 ether;
+    uint256 public playerNFTPrice = 0.0001 ether;
+
+    // doubling the price after...
+    uint256 public dealerStep = 10;
+    uint256 public playerStep = 1000;
+
+    // Add these state variables to the contract
+    uint256 public dealerGuessPrice = 10;
+    uint256 public playerRevealPrice = 10;
 
     // Event to indicate a new guess is added
     event GuessAdded(
@@ -45,20 +60,20 @@ contract Aiamond is
 
     // Event to indicate a guess is revealed
     event GuessRevealedToPlayer(
-        // Address of the NFT the guess is about
-        uint256 indexed nftId,
+        // Player NFT which revealed
+        uint256 indexed playerNftId,
         // ID of the guess
         uint256 indexed guessId,
-        // Address of the player who revealed the guess
-        address player,
+        // Guess Dealer NFT ID
+        uint256 dealerNftId,
         // Address of the token the guess is about
         address tokenAddress,
+        // Chain ID of the token
+        uint256 chainId,
         // Timestamp of the guess
         uint256 timestamp,
         // Initial price of the token
         uint256 initialPrice,
-        // Address of the dealer who made the guess
-        uint256 dealer,
         // needed deposit for revealing the guess
         uint256 neededDeposit
     );
@@ -83,15 +98,12 @@ contract Aiamond is
         uint256 totalDeposited
     );
 
-    // Set the maximum supply of tokens
-    uint256 public constant MAX_SUPPLY = 1000000;
-
     // Keep track of the number of tokens minted
     uint256 public tokensMinted = 0;
 
     // Keep track of the last minted token ID for each type of token
-    uint256 public lastDealerTokenId = 0;
-    uint256 public lastPlayerTokenId = 100;
+    uint256 public lastDealerTokenId = FIRST_DEALER_NFT_ID - 1;
+    uint256 public lastPlayerTokenId = FIRST_PLAYER_NFT_ID - 1;
 
     // keeping track of dealer activities
     struct NftInfo {
@@ -128,20 +140,8 @@ contract Aiamond is
     // Mapping from NFT ID to balance
     mapping(uint256 => uint256) public nftBalances;
 
-    // Add these state variables to the contract
-    uint256 public dealerNFTPrice = 0.001 ether;
-    uint256 public playerNFTPrice = 0.0001 ether;
-
-    // doubling the price after...
-    uint256 public dealerStep = 10;
-    uint256 public playerStep = 20;
-
-    // Add these state variables to the contract
-    uint256 public dealerGuessPrice = 10;
-    uint256 public playerRevealPrice = 10;
-
-    // Add this state variable to the contract
-    uint256 public playerDeposit = 100;
+    // make our NFTs unique
+    mapping(uint256 => bool) private _mintedTokens;
 
     constructor(
         address initialOwner
@@ -155,7 +155,7 @@ contract Aiamond is
 
     function mintDealer() public payable whenNotPaused {
         require(
-            lastDealerTokenId <= LAST_DEALER_NFT_ID,
+            lastDealerTokenId < LAST_DEALER_NFT_ID,
             "All DEALER tokens have been minted"
         );
         mintToken(++lastDealerTokenId, dealerNFTPrice);
@@ -163,23 +163,25 @@ contract Aiamond is
 
     function mintPlayer() public payable whenNotPaused {
         require(
-            lastPlayerTokenId <= LAST_PLAYER_NFT_ID,
+            lastPlayerTokenId < LAST_PLAYER_NFT_ID,
             "All PLAYER tokens have been minted"
         );
         mintToken(++lastPlayerTokenId, playerNFTPrice);
     }
 
     function mintToken(uint256 tokenId, uint256 tokenPrice) internal {
-        require(
-            msg.value >= tokenPrice,
-            "Not enough Ether sent for minting a token"
-        );
+        if (msg.sender != owner()) {
+            require(
+                msg.value >= tokenPrice,
+                "Not enough Ether sent for minting a token"
+            );
 
-        // Transfer the payment to the contract owner
-        payable(owner()).transfer(msg.value);
+            // Transfer the payment to the contract owner
+            payable(owner()).transfer(msg.value);
+        }
 
         // Mint the token to the user's address
-        _mint(msg.sender, tokenId, 1, "");
+        safeMint(msg.sender, tokenId, 1, "");
 
         // Double the token price at different steps for dealer and player tokens
         if (tokenId <= LAST_DEALER_NFT_ID && tokenId % dealerStep == 0) {
@@ -256,15 +258,16 @@ contract Aiamond is
 
     // Player pays to get a guess revealed
     function revealGuessToPlayer(
-        uint256 _nftId,
+        uint256 _playerNftId,
+        uint256 _dealerNftId,
         uint256 _guessId
     ) public whenNotPaused {
         // Check if the sender owns the NFT
         bool isPlayer = false;
         if (
-            FIRST_PLAYER_NFT_ID <= _nftId &&
-            _nftId <= LAST_PLAYER_NFT_ID &&
-            balanceOf(msg.sender, _nftId) > 0
+            FIRST_PLAYER_NFT_ID <= _playerNftId &&
+            _playerNftId <= LAST_PLAYER_NFT_ID &&
+            balanceOf(msg.sender, _playerNftId) > 0
         ) {
             isPlayer = true;
         }
@@ -272,14 +275,14 @@ contract Aiamond is
 
         // Get the guess
         require(
-            _guessId < nftInfo[_nftId].guesses.length,
+            _guessId < nftInfo[_dealerNftId].guesses.length,
             "Guess does not exist"
         );
-        Guess storage guess = nftInfo[_nftId].guesses[_guessId];
+        Guess storage guess = nftInfo[_dealerNftId].guesses[_guessId];
 
         // Check if the guess has already been revealed by the player
         require(
-            guess.players[_nftId] == 0,
+            guess.players[_playerNftId] == 0,
             "This guess has already been revealed"
         );
 
@@ -296,19 +299,20 @@ contract Aiamond is
             guess.neededDeposit,
             ""
         ); // Transfer the deposit to the contract
+
         safeTransferFrom(msg.sender, owner(), CHIPS, playerRevealPrice, ""); // Transfer the reveal price to the owner
 
-        guess.players[_nftId] = guess.neededDeposit;
-        guess.playersParticipating.push(_nftId);
+        guess.players[_playerNftId] = guess.neededDeposit;
+        guess.playersParticipating.push(_playerNftId);
 
         emit GuessRevealedToPlayer(
-            _nftId,
+            _playerNftId,
             _guessId,
-            msg.sender,
+            _dealerNftId,
             guess.tokenAddress,
+            guess.chainId,
             guess.timestamp,
             guess.initialPrice,
-            guess.dealer,
             guess.neededDeposit
         );
     }
@@ -500,7 +504,38 @@ contract Aiamond is
         dealerEntry.correctGuesses = correctGuesses;
     }
 
+    // keeps track of token IDs to make NFT unique
     function mint(
+        address account,
+        uint256 id,
+        uint256 amount,
+        bytes memory data
+    ) public onlyOwner {
+
+        if (id >= FIRST_DEALER_NFT_ID && id <= LAST_DEALER_NFT_ID) {
+            require(
+                lastDealerTokenId < LAST_DEALER_NFT_ID,
+                "All DEALER tokens have been minted"
+            );
+        } else if (id >= FIRST_PLAYER_NFT_ID && id <= LAST_PLAYER_NFT_ID) {
+            require(
+                lastPlayerTokenId < LAST_PLAYER_NFT_ID,
+                "All PLAYER tokens have been minted"
+            );
+        }
+
+        safeMint(account, id, amount, data);
+
+        // owner can ask for an id, this can lead to a gap in the token ids!
+        if (id >= FIRST_DEALER_NFT_ID && id <= LAST_DEALER_NFT_ID) {
+            lastDealerTokenId = id;
+        } else if (id >= FIRST_PLAYER_NFT_ID && id <= LAST_PLAYER_NFT_ID) {
+            lastPlayerTokenId = id;
+        }
+    }
+
+    // emergency function to mint NFT again
+    function mintUnsafe(
         address account,
         uint256 id,
         uint256 amount,
@@ -509,13 +544,91 @@ contract Aiamond is
         _mint(account, id, amount, data);
     }
 
+    // keeps track of token IDs to make NFT unique
     function mintBatch(
         address to,
         uint256[] memory ids,
         uint256[] memory amounts,
         bytes memory data
     ) public onlyOwner {
+        uint256 maxDealerTokenId = lastDealerTokenId;
+        uint256 maxPlayerTokenId = lastPlayerTokenId;
+
+       // call safeMintBatch and safe the max return to vars
+        (maxDealerTokenId, maxPlayerTokenId) = safeMintBatch(to, ids, amounts, data);
+
+        if (maxDealerTokenId >= FIRST_DEALER_NFT_ID && maxDealerTokenId <= LAST_DEALER_NFT_ID) {
+            lastDealerTokenId = maxDealerTokenId;
+        }
+        if (maxPlayerTokenId >= FIRST_PLAYER_NFT_ID && maxPlayerTokenId <= LAST_PLAYER_NFT_ID) {
+            lastPlayerTokenId = maxPlayerTokenId;
+        }
+    }
+
+    // emergency function to mint NFTs again
+    function mintBatchUnsafe(
+        address to,
+        uint256[] memory ids,
+        uint256[] memory amounts,
+        bytes memory data
+    ) public onlyOwner {
         _mintBatch(to, ids, amounts, data);
+    }
+
+    function safeMint(address to, uint256 id, uint256 amount, bytes memory data) internal {
+        require(!_mintedTokens[id], "Token has already been minted");
+        _mintedTokens[id] = true;
+        _mint(to, id, amount, data);
+    }
+    
+    function safeMintBatch(address to, uint256[] memory ids, uint256[] memory amounts, bytes memory data) internal returns (uint256, uint256) {
+        require(ids.length == amounts.length, "IDs and amounts array length must match");
+
+        uint256 maxDealerTokenId = lastDealerTokenId;
+        uint256 maxPlayerTokenId = lastPlayerTokenId;
+
+        // First, check all the tokens
+        for (uint i = 0; i < ids.length; i++) {
+            uint256 id = ids[i];
+
+            require(!_mintedTokens[id], "Token has already been minted");
+
+            if (id >= FIRST_DEALER_NFT_ID && id <= LAST_DEALER_NFT_ID) {
+                if (id > maxDealerTokenId) {
+                    maxDealerTokenId = id;
+                }
+            } else if (id >= FIRST_PLAYER_NFT_ID && id <= LAST_PLAYER_NFT_ID) {
+                if (id > maxPlayerTokenId) {
+                    maxPlayerTokenId = id;
+                }
+            }
+        }
+
+        require(
+            maxDealerTokenId <= LAST_DEALER_NFT_ID,
+            "All DEALER tokens have been minted"
+        );
+        require(
+            maxPlayerTokenId <= LAST_PLAYER_NFT_ID,
+            "All PLAYER tokens have been minted"
+        );
+
+        _mintBatch(to, ids, amounts, data);
+
+        // If all the tokens passed the check, mark them as minted
+        for (uint i = 0; i < ids.length; i++) {
+            _mintedTokens[ids[i]] = true;
+        }
+
+        return (maxDealerTokenId, maxPlayerTokenId);
+    }
+
+    function setLastDealerTokenId(uint256 id) public onlyOwner {
+        lastDealerTokenId = id;
+    }
+
+    function setLastPlayerTokenId(uint256 id) public onlyOwner {
+        lastPlayerTokenId = id;
     }
 
     // END OWNER functions
@@ -589,10 +702,16 @@ contract Aiamond is
     }
 
     // Get the details of a guess
-    function getGuess(uint256 _nftId, uint256 _guessId) public view returns (uint256, address, uint256, uint256, bytes32, uint256, bool, uint256) {
+    function getGuess(uint256 _nftId, uint256 _guessId) public view returns (uint256, uint256[] memory, uint256[] memory, address, uint256, uint256, bytes32, uint256, bool, uint256) {
         require(_guessId < nftInfo[_nftId].guesses.length, "Invalid guess ID");
         Guess storage guess = nftInfo[_nftId].guesses[_guessId];
-        return (guess.dealer, guess.tokenAddress, guess.chainId, guess.timestamp, guess.guessHash, guess.initialPrice, guess.isPriceRevealed, guess.neededDeposit);
+
+        uint256[] memory playersDeposits = new uint256[](guess.playersParticipating.length);
+        for (uint i = 0; i < guess.playersParticipating.length; i++) {
+            playersDeposits[i] = guess.players[guess.playersParticipating[i]];
+        }
+
+        return (guess.dealer, guess.playersParticipating, playersDeposits, guess.tokenAddress, guess.chainId, guess.timestamp, guess.guessHash, guess.initialPrice, guess.isPriceRevealed, guess.neededDeposit);
     }
 
     function getNftInfo(uint256 dealerNftId) public view returns (uint256, uint256) {
