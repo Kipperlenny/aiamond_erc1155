@@ -112,28 +112,28 @@ describe("Aiamond", function () {
             // Setup: Define the _nftId and add some balance to it
             let _nftId = 1;
             await aiamond.addChipsToNft(_nftId, 100);
-    
+
             // Act: Call the withdrawFromNft function
             await aiamond.withdrawFromNft(_nftId);
-    
+
             // Assert: Check the balance of the NFT
             expect(await aiamond.nftBalances(_nftId)).to.equal(0);
-    
+
             // Assert: Check the balance of the owner
             expect(await aiamond.balanceOf(owner.address, 0)).to.equal(MAX_CHIPS_SUPPLY);
         });
-    
+
         it("should allow the dealer to withdraw from his NFT", async function () {
             // Setup: Define the _nftId and add some balance to it
             let _nftId = FIRST_DEALER_NFT_ID;
             await aiamond.connect(owner).addChipsToNft(_nftId, 100);
-    
+
             // Act: Call the withdrawFromNft function
             await aiamond.connect(dealerNft1).withdrawFromNft(_nftId);
-    
+
             // Assert: Check the balance of the NFT
             expect(await aiamond.nftBalances(_nftId)).to.equal(0);
-    
+
             // Assert: Check the balance of the dealer
             expect(await aiamond.balanceOf(dealerNft1.address, 0)).to.equal(100);
         });
@@ -168,7 +168,7 @@ describe("Aiamond", function () {
             let timestamp = Math.floor(Date.now() / 1000);
             let initialPrice = 100;
             let neededDeposit = 10;
-            
+
             await aiamond.connect(owner).safeTransferFrom(owner.address, dealerNft1.address, 0, 10, "0x");
             await aiamond.connect(dealerNft1).addGuess(guessHash, nftId, externTokenAddress, chainId, timestamp, initialPrice, neededDeposit);
 
@@ -185,7 +185,7 @@ describe("Aiamond", function () {
                 .to.emit(aiamond, "PriceRevealed")
                 .withArgs(
                     externTokenAddress,
-                    timestamp, 
+                    timestamp,
                     endPrice,
                     initialPrice,
                     guessedPrice,
@@ -252,20 +252,20 @@ describe("Aiamond", function () {
             // Setup: Define the dealerNftId and correctGuesses
             let dealerNftId = FIRST_DEALER_NFT_ID;
             let correctGuesses = 5;
-    
+
             // Act: Call the setCorrectGuesses function
             await aiamond.connect(owner).setCorrectGuesses(dealerNftId, correctGuesses);
-    
+
             // Assert: Check the correctGuesses value
             let dealerEntry = await aiamond.nftInfo(dealerNftId);
             expect(dealerEntry).to.equal(correctGuesses);
         });
-    
+
         it("should fail if called by a non-owner", async function () {
             // Setup: Define the dealerNftId and correctGuesses
             let dealerNftId = FIRST_DEALER_NFT_ID;
             let correctGuesses = 5;
-    
+
             // Act and Assert: Call the setCorrectGuesses function and expect it to be reverted
             try {
                 await aiamond.connect(addr1).setCorrectGuesses(dealerNftId, correctGuesses);
@@ -278,7 +278,7 @@ describe("Aiamond", function () {
     });
 
     describe("addGuess", function () {
-        
+
         it("should allow a dealer to add a guess", async function () {
             // Setup: Define the parameters for the guess
             let _guessHash = ethers.keccak256(ethers.toUtf8Bytes("test"));
@@ -287,24 +287,24 @@ describe("Aiamond", function () {
             let _initialPrice = ethers.parseEther("1.0");
             let _neededDeposit = 10;
             let initialGuessCount = await aiamond.dealerGuessCount(dealer1NftId);
-            
+
             // Setup: Give the dealer enough CHIPS tokens
             await aiamond.connect(owner).safeTransferFrom(owner.address, dealerNft1.address, 0, 10, "0x");
-    
+
             // Act: Call the addGuess function
             await expect(aiamond.connect(dealerNft1).addGuess(
-                    _guessHash,
-                    dealer1NftId,
-                    externTokenAddress,
-                    _chainId,
-                    _timestamp,
-                    _initialPrice,
-                    _neededDeposit
-                ))
+                _guessHash,
+                dealer1NftId,
+                externTokenAddress,
+                _chainId,
+                _timestamp,
+                _initialPrice,
+                _neededDeposit
+            ))
                 .to.emit(aiamond, "GuessAdded")
                 .withArgs(
                     dealerNft1.address,
-                    _guessHash, 
+                    _guessHash,
                     externTokenAddress,
                     _chainId,
                     _timestamp,
@@ -341,25 +341,25 @@ describe("Aiamond", function () {
             let _neededDeposit = 10;
             let _customGuessPrice = 20; // Define a custom guess price
             await aiamond.connect(owner).setSpecialGuessPrice(dealer1NftId, _customGuessPrice);
-            
+
             // Setup: Give the dealer enough CHIPS tokens
             await aiamond.connect(owner).safeTransferFrom(owner.address, dealerNft1.address, CHIPS, _customGuessPrice, "0x");
             let oldOwnerBalance = Number(await aiamond.balanceOf(await aiamond.owner(), CHIPS));
-    
+
             // Act: Call the addGuess function
             await expect(aiamond.connect(dealerNft1).addGuess(
-                    _guessHash,
-                    dealer1NftId,
-                    externTokenAddress,
-                    _chainId,
-                    _timestamp,
-                    _initialPrice,
-                    _neededDeposit
-                ))
+                _guessHash,
+                dealer1NftId,
+                externTokenAddress,
+                _chainId,
+                _timestamp,
+                _initialPrice,
+                _neededDeposit
+            ))
                 .to.emit(aiamond, "GuessAdded")
                 .withArgs(
                     dealerNft1.address,
-                    _guessHash, 
+                    _guessHash,
                     externTokenAddress,
                     _chainId,
                     _timestamp,
@@ -398,7 +398,7 @@ describe("Aiamond", function () {
             let maxGuesses = Number(await aiamond.maxGuesses());
 
             // Setup: Give the dealer enough CHIPS tokens
-            await aiamond.connect(owner).safeTransferFrom(owner.address, dealerNft1.address, CHIPS, dealerGuessPrice * (maxGuesses+1), "0x");
+            await aiamond.connect(owner).safeTransferFrom(owner.address, dealerNft1.address, CHIPS, dealerGuessPrice * (maxGuesses + 1), "0x");
 
             // Setup: Add guesses up to the limit
             for (let i = 0; i < maxGuesses; i++) {
@@ -433,7 +433,7 @@ describe("Aiamond", function () {
             let _timestamp = Math.floor(Date.now() / 1000);
             let _initialPrice = ethers.parseEther("1.0");
             let _neededDeposit = 10;
-    
+
             // Act: Call the addGuess function with a player who doesn't own a dealer NFT
             await expect(
                 aiamond.connect(playerNft1).addGuess(
@@ -451,7 +451,7 @@ describe("Aiamond", function () {
 
     describe("revealGuessToPlayer", function () {
         it("should allow a player to reveal a guess", async function () {
-   
+
             // Setup: Define the _nftId, _guessId and CHIPS
             let CHIPS = 0; // Assuming that the CHIPS token has an ID of 0
             let _guessHash = ethers.keccak256(ethers.toUtf8Bytes("test"));
@@ -459,15 +459,15 @@ describe("Aiamond", function () {
             let _timestamp = Math.floor(Date.now() / 1000);
             let _initialPrice = ethers.parseEther("1.0");
             let _neededDeposit = 10;
-    
+
             // Setup: Give the player enough CHIPS tokens
             await aiamond.connect(owner).safeTransferFrom(owner.address, playerNft1.address, CHIPS, playerRevealPrice + _neededDeposit, "0x");
-    
+
             // Setup: Give the dealer enough CHIPS tokens
             await aiamond.connect(owner).safeTransferFrom(owner.address, dealerNft1.address, CHIPS, dealerGuessPrice, "0x");
 
             let oldOwnerBalance = Number(await aiamond.balanceOf(await aiamond.owner(), CHIPS));
-    
+
             // Setup: Add a guess to the NFT
             await aiamond.connect(dealerNft1).addGuess(
                 _guessHash,
@@ -480,29 +480,29 @@ describe("Aiamond", function () {
             );
 
             let _guessId = await aiamond.getGuessId(dealer1NftId);
-    
+
             // Act: Call the revealGuessToPlayer function
             await expect(aiamond.connect(playerNft1).revealGuessToPlayer(player1NftId, dealer1NftId, _guessId))
-            .to.emit(aiamond, "GuessRevealedToPlayer")
-            .withArgs(
-                player1NftId,
-                _guessId, 
-                dealer1NftId,
-                externTokenAddress,
-                _chainId,
-                _timestamp,
-                _initialPrice,
-                _neededDeposit
-            );
-    
+                .to.emit(aiamond, "GuessRevealedToPlayer")
+                .withArgs(
+                    player1NftId,
+                    _guessId,
+                    dealer1NftId,
+                    externTokenAddress,
+                    _chainId,
+                    _timestamp,
+                    _initialPrice,
+                    _neededDeposit
+                );
+
             // Assert: Check the guess
             let guess = await aiamond.getGuess(dealer1NftId, _guessId);
             expect(guess[1].map(Number)).to.include(player1NftId);
             expect(Number(guess[2][guess[1].map(Number).indexOf(player1NftId)])).to.equal(_neededDeposit);
-    
+
             // Assert: Check the balance of the contract
             expect(await aiamond.balanceOf(aiamondAddress, CHIPS)).to.equal(_neededDeposit);
-    
+
             // Assert: Check the balance of the owner
             expect(await aiamond.balanceOf(await aiamond.owner(), CHIPS)).to.equal(oldOwnerBalance + playerRevealPrice + dealerGuessPrice);
         });
@@ -517,13 +517,13 @@ describe("Aiamond", function () {
             let _neededDeposit = 10;
             let _customRevealPrice = 20; // Define a custom reveal price
             await aiamond.connect(owner).setSpecialRevealPrice(dealer1NftId, _customRevealPrice);
-    
+
             // Setup: Give the player enough CHIPS tokens
             await aiamond.connect(owner).safeTransferFrom(owner.address, playerNft1.address, CHIPS, _customRevealPrice + _neededDeposit, "0x");
-    
+
             // Setup: Give the dealer enough CHIPS tokens
             await aiamond.connect(owner).safeTransferFrom(owner.address, dealerNft1.address, CHIPS, dealerGuessPrice, "0x");
-    
+
             // Setup: Add a guess to the NFT
             await aiamond.connect(dealerNft1).addGuess(
                 _guessHash,
@@ -534,39 +534,39 @@ describe("Aiamond", function () {
                 _initialPrice,
                 _neededDeposit
             );
-    
+
             let _guessId = await aiamond.getGuessId(dealer1NftId);
-    
+
             let oldOwnerBalance = Number(await aiamond.balanceOf(await aiamond.owner(), CHIPS));
-    
+
             // Act: Call the revealGuessToPlayer function
             await expect(aiamond.connect(playerNft1).revealGuessToPlayer(player1NftId, dealer1NftId, _guessId))
-            .to.emit(aiamond, "GuessRevealedToPlayer")
-            .withArgs(
-                player1NftId,
-                _guessId, 
-                dealer1NftId,
-                externTokenAddress,
-                _chainId,
-                _timestamp,
-                _initialPrice,
-                _neededDeposit
-            );
-    
+                .to.emit(aiamond, "GuessRevealedToPlayer")
+                .withArgs(
+                    player1NftId,
+                    _guessId,
+                    dealer1NftId,
+                    externTokenAddress,
+                    _chainId,
+                    _timestamp,
+                    _initialPrice,
+                    _neededDeposit
+                );
+
             // Assert: Check the guess
             let guess = await aiamond.getGuess(dealer1NftId, _guessId);
             expect(guess[1].map(Number)).to.include(player1NftId);
             expect(Number(guess[2][guess[1].map(Number).indexOf(player1NftId)])).to.equal(_neededDeposit);
-    
+
             // Assert: Check the balance of the contract
             expect(await aiamond.balanceOf(aiamondAddress, CHIPS)).to.equal(_neededDeposit);
-    
+
             // Assert: Check the balance of the owner
             expect(await aiamond.balanceOf(await aiamond.owner(), CHIPS)).to.equal(oldOwnerBalance + _customRevealPrice);
         });
 
         it("should fail when the player does not have enough tokens to cover the reveal price", async function () {
-    
+
             // Setup: Define the _nftId, _guessId and CHIPS
             let CHIPS = 0; // Assuming that the CHIPS token has an ID of 0
             let _guessHash = ethers.keccak256(ethers.toUtf8Bytes("test"));
@@ -576,13 +576,13 @@ describe("Aiamond", function () {
             let _neededDeposit = 10;
             let _customRevealPrice = 20; // Define a custom reveal price
             await aiamond.connect(owner).setSpecialRevealPrice(dealer1NftId, _customRevealPrice);
-    
+
             // Setup: Give the player not enough CHIPS tokens
             await aiamond.connect(owner).safeTransferFrom(owner.address, playerNft1.address, CHIPS, _customRevealPrice - 1, "0x");
-    
+
             // Setup: Give the dealer enough CHIPS tokens
             await aiamond.connect(owner).safeTransferFrom(owner.address, dealerNft1.address, CHIPS, dealerGuessPrice, "0x");
-    
+
             // Setup: Add a guess to the NFT
             await aiamond.connect(dealerNft1).addGuess(
                 _guessHash,
@@ -593,12 +593,12 @@ describe("Aiamond", function () {
                 _initialPrice,
                 _neededDeposit
             );
-    
+
             let _guessId = await aiamond.getGuessId(dealer1NftId);
-    
+
             // Act: Call the revealGuessToPlayer function and expect it to be reverted
             await expect(aiamond.connect(playerNft1).revealGuessToPlayer(player1NftId, dealer1NftId, _guessId))
-            .to.be.revertedWith("Not enough tokens to reveal a guess and make a deposit");
+                .to.be.revertedWith("Not enough tokens to reveal a guess and make a deposit");
         });
     });
 
@@ -612,9 +612,9 @@ describe("Aiamond", function () {
 
             // Assert: Check that the dealer now owns the last minted token
             let lastTokenId = await aiamond.lastUsedDealerTokenId();
-            await expect(await aiamond.balanceOf(dealerNft1, lastTokenId)).to.equal(1); 
+            await expect(await aiamond.balanceOf(dealerNft1, lastTokenId)).to.equal(1);
         });
-        
+
         it("should mint 11th DEALER NFT with new price", async function () {
             // Arrange: Set the value to the dealerNFTPrice
             let value = ethers.parseEther("0.001"); // replace with your dealerNFTPrice
@@ -632,16 +632,16 @@ describe("Aiamond", function () {
             await expect(
                 aiamond.connect(dealerNft1).mintDealer({ value })
             ).to.be.revertedWith("Not enough Ether sent for minting a token");
-            await expect(await aiamond.balanceOf(dealerNft1, lastTokenId+1)).to.equal(0);
+            await expect(await aiamond.balanceOf(dealerNft1, lastTokenId + 1)).to.equal(0);
 
             await aiamond.connect(dealerNft1).mintDealer({ value: ethers.parseEther("0.002") });
-            await expect(await aiamond.balanceOf(dealerNft1, lastTokenId+1)).to.equal(1);
+            await expect(await aiamond.balanceOf(dealerNft1, lastTokenId + 1)).to.equal(1);
         });
 
         it("should fail when all dealer tokens have been minted", async function () {
 
             // Arrange: Mint all dealer tokens
-            for (let i = (await aiamond.lastUsedDealerTokenId())+BigInt(1); i <= LAST_DEALER_NFT_ID; i++) {
+            for (let i = (await aiamond.lastUsedDealerTokenId()) + BigInt(1); i <= LAST_DEALER_NFT_ID; i++) {
                 await aiamond.connect(owner).mintDealer(); // owner can mint for free
             }
 
@@ -661,10 +661,10 @@ describe("Aiamond", function () {
                 aiamond.connect(dealerNft1).mintDealer({ value: (await aiamond.dealerNFTPrice()).toString() })
             ).to.be.revertedWith("All DEALER tokens have been minted");
         });
-        
+
         it("should fail at the 10th DEALER NFT because the price went up", async function () {
             let value = ethers.parseEther("0.001"); // replace with your dealerNFTPrice
-            
+
             // Arrange: Mint 10 dealer tokens
             let lastTokenId = Number(await aiamond.lastUsedDealerTokenId());
             for (let i = lastTokenId; i <= FIRST_DEALER_NFT_ID + 9; i++) {
@@ -688,16 +688,16 @@ describe("Aiamond", function () {
             // Arrange: Set the value to the playerNFTPrice
             const value = ethers.parseEther("0.0001"); // replace with your playerNFTPrice
             let tokenIdBefore = await aiamond.lastUsedPlayerTokenId();
-            
+
             // Act: Call the mintPlayer function
             await aiamond.connect(playerNft1).mintPlayer({ value });
 
             // Assert: Check that the player now owns the last minted token
             let lastTokenId = await aiamond.lastUsedPlayerTokenId();
-            await expect(await aiamond.balanceOf(playerNft1, lastTokenId)).to.equal(1); 
+            await expect(await aiamond.balanceOf(playerNft1, lastTokenId)).to.equal(1);
 
             // Assert: Check that the lastUsedPlayerTokenId has been incremented
-            await expect(lastTokenId).to.equal(tokenIdBefore + BigInt(1)); 
+            await expect(lastTokenId).to.equal(tokenIdBefore + BigInt(1));
         });
 
         it("should fail when all player tokens have been minted", async function () {
@@ -707,10 +707,10 @@ describe("Aiamond", function () {
             // Arrange: Mint all player tokens
             let alreadyMinted = Number(await aiamond.lastUsedPlayerTokenId());
             const batchSize = 400; // Adjust this number based on what your environment can handle
-            
+
             for (let i = alreadyMinted + 1; i <= LAST_PLAYER_NFT_ID; i += batchSize) {
                 const batchEnd = Math.min(i + batchSize - 1, LAST_PLAYER_NFT_ID);
-                const ids = Array.from({length: batchEnd - i + 1}, (_, j) => j + i);
+                const ids = Array.from({ length: batchEnd - i + 1 }, (_, j) => j + i);
                 const amounts = Array(ids.length).fill(1);
                 await aiamond.connect(owner).mintBatch(owner.address, ids, amounts, "0x", { gasLimit: 30000000 });
             }
@@ -721,7 +721,7 @@ describe("Aiamond", function () {
             ).to.be.revertedWith("All PLAYER tokens have been minted");
         });
     });
-    
+
     describe("setLastIds", function () {
         it("should allow owner to set lastUsedDealerTokenId", async () => {
             const newId = 10;
@@ -757,81 +757,81 @@ describe("Aiamond", function () {
             }
         });
 
-        it("Should set the last dealer NFT ID if the owner calls the function", async function() {
-          await aiamond.setLastDealerNftId(200);
-          expect(await aiamond.lastDealerNftId()).to.equal(200);
-        });
-      
-        it("Should set the last player NFT ID if the owner calls the function", async function() {
-          await aiamond.setLastPlayerNftId(300);
-          expect(await aiamond.lastPlayerNftId()).to.equal(300);
-        });
-      
-        it("Should fail if someone other than the owner tries to set the last dealer NFT ID", async function() {
-          try {
-              await aiamond.connect(addr1).setLastDealerNftId(200);
-              expect.fail('Expected setLastPlayerNftId to revert');
-          } catch (err) {
-              expect(err.message).to.include('OwnableUnauthorizedAccount');
-          }
-        });
-      
-        it("Should fail if someone other than the owner tries to set the last player NFT ID", async function() {
-          try {
-              await aiamond.connect(addr1).setLastPlayerNftId(300);
-              expect.fail('Expected setLastPlayerNftId to revert');
-          } catch (err) {
-              expect(err.message).to.include('OwnableUnauthorizedAccount');
-          }
+        it("Should set the last dealer NFT ID if the owner calls the function", async function () {
+            await aiamond.setLastDealerNftId(200);
+            expect(await aiamond.lastDealerNftId()).to.equal(200);
         });
 
-        it("Should set a special reveal price if the owner calls the function", async function() {
-          await aiamond.connect(owner).setSpecialRevealPrice(1, 20);
-          expect(await aiamond.getRevealPrice(1)).to.equal(20);
-        });
-      
-        it("Should fail if someone other than the owner tries to set a special reveal price", async function() {
-          try {
-              await aiamond.connect(addr1).setSpecialRevealPrice(1, 20);
-              expect.fail('Expected setSpecialRevealPrice to revert');
-          } catch (err) {
-              expect(err.message).to.include('OwnableUnauthorizedAccount');
-          }
+        it("Should set the last player NFT ID if the owner calls the function", async function () {
+            await aiamond.setLastPlayerNftId(300);
+            expect(await aiamond.lastPlayerNftId()).to.equal(300);
         });
 
-        it("Should set a special guess price if the owner calls the function", async function() {
-          await aiamond.connect(owner).setSpecialGuessPrice(1, 20);
-          expect(await aiamond.getGuessPrice(1)).to.equal(20);
+        it("Should fail if someone other than the owner tries to set the last dealer NFT ID", async function () {
+            try {
+                await aiamond.connect(addr1).setLastDealerNftId(200);
+                expect.fail('Expected setLastPlayerNftId to revert');
+            } catch (err) {
+                expect(err.message).to.include('OwnableUnauthorizedAccount');
+            }
         });
-      
-        it("Should fail if someone other than the owner tries to set a special guess price", async function() {
-          try {
-              await aiamond.connect(addr1).setSpecialGuessPrice(1, 20);
-              expect.fail('Expected setSpecialGuessPrice to revert');
-          } catch (err) {
-              expect(err.message).to.include('OwnableUnauthorizedAccount');
-          }
+
+        it("Should fail if someone other than the owner tries to set the last player NFT ID", async function () {
+            try {
+                await aiamond.connect(addr1).setLastPlayerNftId(300);
+                expect.fail('Expected setLastPlayerNftId to revert');
+            } catch (err) {
+                expect(err.message).to.include('OwnableUnauthorizedAccount');
+            }
+        });
+
+        it("Should set a special reveal price if the owner calls the function", async function () {
+            await aiamond.connect(owner).setSpecialRevealPrice(1, 20);
+            expect(await aiamond.getRevealPrice(1)).to.equal(20);
+        });
+
+        it("Should fail if someone other than the owner tries to set a special reveal price", async function () {
+            try {
+                await aiamond.connect(addr1).setSpecialRevealPrice(1, 20);
+                expect.fail('Expected setSpecialRevealPrice to revert');
+            } catch (err) {
+                expect(err.message).to.include('OwnableUnauthorizedAccount');
+            }
+        });
+
+        it("Should set a special guess price if the owner calls the function", async function () {
+            await aiamond.connect(owner).setSpecialGuessPrice(1, 20);
+            expect(await aiamond.getGuessPrice(1)).to.equal(20);
+        });
+
+        it("Should fail if someone other than the owner tries to set a special guess price", async function () {
+            try {
+                await aiamond.connect(addr1).setSpecialGuessPrice(1, 20);
+                expect.fail('Expected setSpecialGuessPrice to revert');
+            } catch (err) {
+                expect(err.message).to.include('OwnableUnauthorizedAccount');
+            }
         });
 
         it("should allow the owner to set a new limit for guesses", async function () {
             // Setup: Define a new limit
             let maxGuesses = Number(await aiamond.maxGuesses());
             let newLimit = maxGuesses + 5;
-    
+
             // Act: Set the new limit
             await aiamond.connect(owner).setMaxGuesses(newLimit);
-    
+
             // Assert: Check that the new limit has been set
             expect(await aiamond.maxGuesses()).to.equal(newLimit);
         });
-      
-        it("Should fail if someone other than the owner tries to set a new limit for guesses", async function() {
-          try {
-              await aiamond.connect(addr1).setMaxGuesses(20);
-              expect.fail('Expected setMaxGuesses to revert');
-          } catch (err) {
-              expect(err.message).to.include('OwnableUnauthorizedAccount');
-          }
+
+        it("Should fail if someone other than the owner tries to set a new limit for guesses", async function () {
+            try {
+                await aiamond.connect(addr1).setMaxGuesses(20);
+                expect.fail('Expected setMaxGuesses to revert');
+            } catch (err) {
+                expect(err.message).to.include('OwnableUnauthorizedAccount');
+            }
         });
     });
 });
