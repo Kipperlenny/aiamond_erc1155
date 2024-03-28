@@ -178,6 +178,9 @@ describe("Aiamond", function () {
             let guessedPrice = 100;
             let nonce = 1;
 
+            // Get the initial guess count for the dealer
+            let initialGuessCount = await aiamond.dealerGuessCount(nftId);
+
             await expect(aiamond.revealPriceForGuess(nftId, guessId, endPrice, guessedPrice, nonce))
                 .to.emit(aiamond, "PriceRevealed")
                 .withArgs(
@@ -194,6 +197,10 @@ describe("Aiamond", function () {
             // Assert: Check the guess details
             [dealer, playersParticipating, playersDeposits, tokenAddress, chainId, timestamp, guessHash, initialPrice, isPriceRevealed, neededDeposit] = await aiamond.getGuess(nftId, guessId);
             expect(isPriceRevealed).to.equal(true);
+
+            // Assert: Check that the guess count for the dealer has been decremented
+            let finalGuessCount = await aiamond.dealerGuessCount(nftId);
+            expect(finalGuessCount).to.equal(Number(initialGuessCount) - 1);
 
         });
 
@@ -279,6 +286,7 @@ describe("Aiamond", function () {
             let _timestamp = Math.floor(Date.now() / 1000);
             let _initialPrice = ethers.parseEther("1.0");
             let _neededDeposit = 10;
+            let initialGuessCount = await aiamond.dealerGuessCount(dealer1NftId);
             
             // Setup: Give the dealer enough CHIPS tokens
             await aiamond.connect(owner).safeTransferFrom(owner.address, dealerNft1.address, 0, 10, "0x");
@@ -305,6 +313,9 @@ describe("Aiamond", function () {
                     _neededDeposit
                 );
 
+            // Assert: Check that the guess count for the dealer has been decremented
+            let finalGuessCount = await aiamond.dealerGuessCount(dealer1NftId);
+            expect(finalGuessCount).to.equal(Number(initialGuessCount) + 1);
 
             // Assert: Check the guess
             let guessId = 0;

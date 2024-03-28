@@ -382,6 +382,9 @@ contract Aiamond is
         // If there are any pending deposits for this guess, transfer them now
         uint256 totalDeposited = transferDeposits(guess, _dealerNftId, _endPrice);
 
+        // Decrement the guess count for the dealer
+        dealerGuessCount[_dealerNftId]--;
+
         // Emit the PriceRevealed event
         emit PriceRevealed(
             guess.tokenAddress,
