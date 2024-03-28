@@ -88,7 +88,7 @@ describe("Aiamond", function () {
         });
 
         it("should fail if there are no chips to withdraw", async function () {
-            await expect(aiamond.withdrawChips()).to.be.revertedWith("No CHIPS to withdraw");
+            await expect(aiamond.withdrawChips()).to.be.revertedWithCustomError(aiamond, "NoChipsToWithdraw");
         });
 
         it("should allow the owner to withdraw chips if there are any", async function () {
@@ -145,7 +145,7 @@ describe("Aiamond", function () {
 
             // Act and Assert: Call the withdrawFromNft function and expect it to be reverted
             await expect(aiamond.connect(dealerNft2).withdrawFromNft(_nftId))
-                .to.be.revertedWith("NFT does not exist or sender is not the owner");
+                .to.be.revertedWithCustomError(aiamond, "NftDoesNotExistOrSenderNotOwner");
         });
 
         it("should fail if there are no funds to withdraw", async function () {
@@ -154,7 +154,7 @@ describe("Aiamond", function () {
 
             // Act and Assert: Call the withdrawFromNft function and expect it to be reverted
             await expect(aiamond.connect(dealerNft1).withdrawFromNft(_nftId))
-                .to.be.revertedWith("No funds to withdraw");
+                .to.be.revertedWithCustomError(aiamond, "NoFundsToWithdraw");
         });
     });
 
@@ -223,7 +223,7 @@ describe("Aiamond", function () {
 
             // Act: Try to reveal the price again
             await expect(aiamond.revealPriceForGuess(nftId, guessId, endPrice, guessedPrice, nonce))
-                .to.be.revertedWith("Price for this guess has already been revealed");
+                .to.be.revertedWithCustomError(aiamond, "PriceForGuessAlreadyRevealed");
         });
 
         it("should fail if the guessed price and nonce do not match the hash", async function () {
@@ -243,7 +243,7 @@ describe("Aiamond", function () {
             let guessedPrice = 100;
             let nonce = 1;
             await expect(aiamond.revealPriceForGuess(nftId, guessId, endPrice, guessedPrice + 1, nonce))
-                .to.be.revertedWith("Guessed price and nonce do not match the hash");
+                .to.be.revertedWithCustomError(aiamond, "GuessedPriceAndNonceDoNotMatchHash");
         });
     });
 
@@ -422,7 +422,7 @@ describe("Aiamond", function () {
                 _timestamp,
                 _initialPrice,
                 _neededDeposit
-            )).to.be.revertedWith("Dealer has reached the maximum number of guesses");
+            )).to.be.revertedWithCustomError(aiamond, "DealerReachedMaxGuesses");
         });
 
         it("should fail when a player without a dealer NFT tries to add a guess", async function () {
@@ -445,7 +445,7 @@ describe("Aiamond", function () {
                     _initialPrice,
                     _neededDeposit
                 )
-            ).to.be.revertedWith("Only DEALER NFT owners can make a guess"); // Assert: Check the failure message
+            ).to.be.revertedWithCustomError(aiamond, "OnlyDealerNftOwnersCanGuess"); // Assert: Check the failure message
         });
     });
 
@@ -598,7 +598,7 @@ describe("Aiamond", function () {
 
             // Act: Call the revealGuessToPlayer function and expect it to be reverted
             await expect(aiamond.connect(playerNft1).revealGuessToPlayer(player1NftId, dealer1NftId, _guessId))
-                .to.be.revertedWith("Not enough tokens to reveal a guess and make a deposit");
+                .to.be.revertedWithCustomError(aiamond, "NotEnoughTokensToRevealAndDeposit");
         });
     });
 
@@ -631,7 +631,7 @@ describe("Aiamond", function () {
             // After 10 NFT minted, the price should be increased (2 have been minted in beforeEach)
             await expect(
                 aiamond.connect(dealerNft1).mintDealer({ value })
-            ).to.be.revertedWith("Not enough Ether sent for minting a token");
+            ).to.be.revertedWithCustomError(aiamond, "NotEnoughEtherForMinting");
             await expect(await aiamond.balanceOf(dealerNft1, lastTokenId + 1)).to.equal(0);
 
             await aiamond.connect(dealerNft1).mintDealer({ value: ethers.parseEther("0.002") });
@@ -659,7 +659,7 @@ describe("Aiamond", function () {
             // Act & Assert: Attempt to mint one more dealer token and expect it to fail
             await expect(
                 aiamond.connect(dealerNft1).mintDealer({ value: (await aiamond.dealerNFTPrice()).toString() })
-            ).to.be.revertedWith("All DEALER tokens have been minted");
+            ).to.be.revertedWithCustomError(aiamond, "AllDealerTokensMinted");
         });
 
         it("should fail at the 10th DEALER NFT because the price went up", async function () {
@@ -677,7 +677,7 @@ describe("Aiamond", function () {
             // Act & Assert: Attempt to mint one more dealer token and expect it to fail because of the new price
             await expect(
                 aiamond.connect(dealerNft1).mintDealer({ value: ethers.parseEther("0.001") })
-            ).to.be.revertedWith("Not enough Ether sent for minting a token");
+            ).to.be.revertedWithCustomError(aiamond, "NotEnoughEtherForMinting");
 
         });
 
@@ -718,7 +718,7 @@ describe("Aiamond", function () {
             // Act & Assert: Attempt to mint one more player token and expect it to fail
             await expect(
                 aiamond.connect(playerNft1).mintPlayer({ value: (await aiamond.playerNFTPrice()).toString() })
-            ).to.be.revertedWith("All PLAYER tokens have been minted");
+            ).to.be.revertedWithCustomError(aiamond, "AllPlayerTokensMinted");
         });
     });
 

@@ -9,6 +9,28 @@ import "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Burnable.sol";
 import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
 
+error AllDealerTokensMinted();
+error AllPlayerTokensMinted();
+error NotEnoughEtherForMinting();
+error OnlyDealerNftOwnersCanGuess();
+error DealerReachedMaxGuesses();
+error NotEnoughTokensToGuess();
+error OnlyPlayerNftOwnersCanReveal();
+error GuessDoesNotExist();
+error GuessAlreadyRevealed();
+error NotEnoughTokensToRevealAndDeposit();
+error PriceForGuessAlreadyRevealed();
+error GuessedPriceAndNonceDoNotMatchHash();
+error FailedToSendEther();
+error NoChipsToWithdraw();
+error NotEnoughChips();
+error TokenAlreadyMinted();
+error IdsAndAmountsLengthMustMatch();
+error NftDoesNotExistOrSenderNotOwner();
+error NoFundsToWithdraw();
+error NoGuessesForThisNft();
+error InvalidGuessId();
+
 /// @title Aiamond
 /// @author Kipperlenny
 /// @notice This contract manages the aiamond.com token
@@ -213,19 +235,17 @@ contract Aiamond is
 
     /// @notice Function to mint a dealer token
     function mintDealer() public payable whenNotPaused {
-        require(
-            lastUsedDealerTokenId < lastDealerNftId,
-            "All DEALER tokens have been minted"
-        );
+        if (lastUsedDealerTokenId >= lastDealerNftId) {
+            revert AllDealerTokensMinted();
+        }
         mintToken(++lastUsedDealerTokenId, dealerNFTPrice);
     }
 
     /// @notice Function to mint a player token
     function mintPlayer() public payable whenNotPaused {
-        require(
-            lastUsedPlayerTokenId < lastPlayerNftId,
-            "All PLAYER tokens have been minted"
-        );
+        if (lastUsedPlayerTokenId >= lastPlayerNftId) {
+            revert AllPlayerTokensMinted();
+        }
         mintToken(++lastUsedPlayerTokenId, playerNFTPrice);
     }
 
@@ -234,10 +254,9 @@ contract Aiamond is
     /// @param tokenPrice Price of the token
     function mintToken(uint256 tokenId, uint256 tokenPrice) internal {
         if (msg.sender != owner()) {
-            require(
-                msg.value >= tokenPrice,
-                "Not enough Ether sent for minting a token"
-            );
+            if (msg.value < tokenPrice) {
+                revert NotEnoughEtherForMinting();
+            }
 
             // Transfer the payment to the contract owner
             // payable(owner()).transfer(msg.value);
@@ -285,18 +304,22 @@ contract Aiamond is
         ) {
             isDealer = true;
         }
-        require(isDealer, "Only DEALER NFT owners can make a guess");
+
+        if (!isDealer) {
+            revert OnlyDealerNftOwnersCanGuess();
+        }
 
         // Check if the dealer has not exceeded the maximum number of guesses
-        require(dealerGuessCount[_nftId] < maxGuesses, "Dealer has reached the maximum number of guesses");
+        if (dealerGuessCount[_nftId] >= maxGuesses) {
+            revert DealerReachedMaxGuesses();
+        }
 
         uint256 guessPrice = getGuessPrice(_nftId);
 
         // Check if the sender has enough tokens of ID 0
-        require(
-            balanceOf(msg.sender, 0) >= guessPrice,
-            "Not enough tokens to make a guess"
-        );
+        if (balanceOf(msg.sender, 0) < guessPrice) {
+            revert NotEnoughTokensToGuess();
+        }
 
         // transfer the guessPrice to the owner
         safeTransferFrom(msg.sender, owner(), CHIPS, guessPrice, "");
@@ -353,28 +376,27 @@ contract Aiamond is
         ) {
             isPlayer = true;
         }
-        require(isPlayer, "Only PLAYER NFT owners can reveal a guess");
+
+        if (!isPlayer) {
+            revert OnlyPlayerNftOwnersCanReveal();
+        }
 
         // Get the guess
-        require(
-            _guessId < nftInfo[_dealerNftId].guesses.length,
-            "Guess does not exist"
-        );
+        if (_guessId >= nftInfo[_dealerNftId].guesses.length) {
+            revert GuessDoesNotExist();
+        }
         Guess storage guess = nftInfo[_dealerNftId].guesses[_guessId];
 
         // Check if the guess has already been revealed by the player
-        require(
-            guess.players[_playerNftId] == 0,
-            "This guess has already been revealed"
-        );
+        if (guess.players[_playerNftId] != 0) {
+            revert GuessAlreadyRevealed();
+        }
 
         uint256 revealPrice = getRevealPrice(_dealerNftId);
 
-        require(
-            balanceOf(msg.sender, CHIPS) >=
-                revealPrice + guess.neededDeposit,
-            "Not enough tokens to reveal a guess and make a deposit"
-        );
+        if (balanceOf(msg.sender, CHIPS) < revealPrice + guess.neededDeposit) {
+            revert NotEnoughTokensToRevealAndDeposit();
+        }
 
         safeTransferFrom(
             msg.sender,
@@ -434,17 +456,14 @@ contract Aiamond is
         Guess storage guess = nft.guesses[_guessId];
 
         // Check if the guess has already been revealed
-        require(
-            !guess.isPriceRevealed,
-            "Price for this guess has already been revealed"
-        );
+        if (guess.isPriceRevealed) {
+            revert PriceForGuessAlreadyRevealed();
+        }
 
         // Check if the _guessedPrice and _nonce create the correct hash
-        require(
-            keccak256(abi.encodePacked(_guessedPrice, _nonce)) ==
-                guess.guessHash,
-            "Guessed price and nonce do not match the hash"
-        );
+        if (keccak256(abi.encodePacked(_guessedPrice, _nonce)) != guess.guessHash) {
+            revert GuessedPriceAndNonceDoNotMatchHash();
+        }
 
         // Reveal the price for this guess
         guess.isPriceRevealed = true;
@@ -502,7 +521,7 @@ contract Aiamond is
     /// @param _endPrice The real price at the end
     /// @return totalDeposited Total amount of deposits for this guess
     function transferDeposits(Guess storage guess, uint256 _dealerNftId, uint256 _endPrice) internal returns (uint256 totalDeposited) {
-        for (uint pi = 0; pi < guess.playersParticipating.length; pi++) {
+        for (uint256 pi = 0; pi < guess.playersParticipating.length; pi++) {
             uint256 playerNftId = guess.playersParticipating[pi];
             uint256 playerDeposited = guess.players[playerNftId];
             if (guess.guessedPrice <= _endPrice) {
@@ -555,7 +574,9 @@ contract Aiamond is
     /// @notice Function to withdraw the balance of the contract
     function withdrawBalance() public onlyOwner {
         (bool success, ) = payable(owner()).call{value: address(this).balance}("");
-        require(success, "Failed to send Ether");
+        if (!success) {
+            revert FailedToSendEther();
+        }
     }
 
     /// @notice Function to pay the contract
@@ -564,7 +585,9 @@ contract Aiamond is
     /// @notice Function to withdraw the CHIPS tokens from the contract
     function withdrawChips() public onlyOwner {
         uint256 balance = balanceOf(address(this), CHIPS);
-        require(balance > 0, "No CHIPS to withdraw");
+        if (balance <= 0) {
+            revert NoChipsToWithdraw();
+        }
         _safeTransferFrom(address(this), owner(), CHIPS, balance, "");
 
     }
@@ -573,7 +596,9 @@ contract Aiamond is
     /// @param _nftId ID of the NFT to add CHIPS to
     /// @param _amount Amount of CHIPS to add
     function addChipsToNft(uint256 _nftId, uint256 _amount) public onlyOwner {
-        require(balanceOf(msg.sender, CHIPS) >= _amount, "Not enough CHIPS");
+        if (balanceOf(msg.sender, CHIPS) < _amount) {
+            revert NotEnoughChips();
+        }
 
         // Transfer the CHIPS from the owner to the contract
         _safeTransferFrom(msg.sender, address(this), CHIPS, _amount, "");
@@ -585,7 +610,9 @@ contract Aiamond is
     /// @notice Function to add CHIPS to the contract (for testing purposes)
     /// @param _amount Amount of CHIPS to add
     function addChipsToContract(uint256 _amount) public onlyOwner {
-        require(balanceOf(msg.sender, CHIPS) >= _amount, "Not enough CHIPS");
+        if (balanceOf(msg.sender, CHIPS) < _amount) {
+            revert NotEnoughChips();
+        }
 
         // Transfer the CHIPS from the owner to the contract
         safeTransferFrom(msg.sender, address(this), CHIPS, _amount, "");
@@ -654,15 +681,13 @@ contract Aiamond is
     ) public onlyOwner {
 
         if (id >= FIRST_DEALER_NFT_ID && id <= lastDealerNftId) {
-            require(
-                lastUsedDealerTokenId < lastDealerNftId,
-                "All DEALER tokens have been minted"
-            );
+            if (lastUsedDealerTokenId >= lastDealerNftId) {
+                revert AllDealerTokensMinted();
+            }
         } else if (id >= FIRST_PLAYER_NFT_ID && id <= lastPlayerNftId) {
-            require(
-                lastUsedPlayerTokenId < lastPlayerNftId,
-                "All PLAYER tokens have been minted"
-            );
+            if (lastUsedPlayerTokenId >= lastPlayerNftId) {
+                revert AllPlayerTokensMinted();
+            }
         }
 
         safeMint(account, id, amount, data);
@@ -734,7 +759,9 @@ contract Aiamond is
     /// @param amount amount to mint
     /// @param data additional data
     function safeMint(address to, uint256 id, uint256 amount, bytes memory data) internal {
-        require(!_mintedTokens[id], "Token has already been minted");
+        if (_mintedTokens[id]) {
+            revert TokenAlreadyMinted();
+        }
         _mintedTokens[id] = true;
         _mint(to, id, amount, data);
     }
@@ -745,16 +772,20 @@ contract Aiamond is
     /// @param amounts amounts to mint
     /// @param data additional data
     function safeMintBatch(address to, uint256[] memory ids, uint256[] memory amounts, bytes memory data) internal returns (uint256, uint256) {
-        require(ids.length == amounts.length, "IDs and amounts array length must match");
+        if (ids.length != amounts.length) {
+            revert IdsAndAmountsLengthMustMatch();
+        }
 
         uint256 maxDealerTokenId = lastUsedDealerTokenId;
         uint256 maxPlayerTokenId = lastUsedPlayerTokenId;
 
         // First, check all the tokens
-        for (uint i = 0; i < ids.length; i++) {
+        for (uint256 i = 0; i < ids.length; i++) {
             uint256 id = ids[i];
 
-            require(!_mintedTokens[id], "Token has already been minted");
+            if (_mintedTokens[id]) {
+                revert TokenAlreadyMinted();
+            }
 
             if (id >= FIRST_DEALER_NFT_ID && id <= lastDealerNftId) {
                 if (id > maxDealerTokenId) {
@@ -767,19 +798,17 @@ contract Aiamond is
             }
         }
 
-        require(
-            maxDealerTokenId <= lastDealerNftId,
-            "All DEALER tokens have been minted"
-        );
-        require(
-            maxPlayerTokenId <= lastPlayerNftId,
-            "All PLAYER tokens have been minted"
-        );
+        if (maxDealerTokenId > lastDealerNftId) {
+            revert AllDealerTokensMinted();
+        }
+        if (maxPlayerTokenId > lastPlayerNftId) {
+            revert AllPlayerTokensMinted();
+        }
 
         _mintBatch(to, ids, amounts, data);
 
         // If all the tokens passed the check, mark them as minted
-        for (uint i = 0; i < ids.length; i++) {
+        for (uint256 i = 0; i < ids.length; i++) {
             _mintedTokens[ids[i]] = true;
         }
 
@@ -861,11 +890,12 @@ contract Aiamond is
     /// @notice Function to withdraw the balance of an NFT
     /// @param _nftId ID of the NFT
     function withdrawFromNft(uint256 _nftId) public {
-        require(
-            balanceOf(msg.sender, _nftId) > 0 || msg.sender == owner(),
-            "NFT does not exist or sender is not the owner"
-        );
-        require(nftBalances[_nftId] > 0, "No funds to withdraw");
+        if (balanceOf(msg.sender, _nftId) <= 0 && msg.sender != owner()) {
+            revert NftDoesNotExistOrSenderNotOwner();
+        }
+        if (nftBalances[_nftId] <= 0) {
+            revert NoFundsToWithdraw();
+        }
 
         uint256 payout = nftBalances[_nftId];
         nftBalances[_nftId] = 0;
@@ -951,7 +981,7 @@ contract Aiamond is
         uint256[] memory prices = new uint256[](nftInfo[_nftId].guesses.length);
 
         // Iterate over the guesses of the NFT
-        for (uint i = 0; i < nftInfo[_nftId].guesses.length; i++) {
+        for (uint256 i = 0; i < nftInfo[_nftId].guesses.length; i++) {
             Guess storage guess = nftInfo[_nftId].guesses[i];
             // If the guess is revealed, add its properties to the arrays
             if (guess.isPriceRevealed) {
@@ -971,7 +1001,9 @@ contract Aiamond is
     /// @param _nftId ID of the NFT
     /// @return guesses Number of guesses
     function getGuessId(uint256 _nftId) public view returns (uint256) {
-        require(nftInfo[_nftId].guesses.length > 0, "No guesses for this NFT");
+        if (nftInfo[_nftId].guesses.length <= 0) {
+            revert NoGuessesForThisNft();
+        }
         return nftInfo[_nftId].guesses.length - 1;
     }
 
@@ -989,11 +1021,14 @@ contract Aiamond is
     /// @return isPriceRevealed Flag indicating if the price is revealed
     /// @return neededDeposit Deposit needed for revealing the guess
     function getGuess(uint256 _nftId, uint256 _guessId) public view returns (uint256, uint256[] memory, uint256[] memory, address, uint256, uint256, bytes32, uint256, bool, uint256) {
-        require(_guessId < nftInfo[_nftId].guesses.length, "Invalid guess ID");
+        if (_guessId >= nftInfo[_nftId].guesses.length) {
+            revert InvalidGuessId();
+        }
+
         Guess storage guess = nftInfo[_nftId].guesses[_guessId];
 
         uint256[] memory playersDeposits = new uint256[](guess.playersParticipating.length);
-        for (uint i = 0; i < guess.playersParticipating.length; i++) {
+        for (uint256 i = 0; i < guess.playersParticipating.length; i++) {
             playersDeposits[i] = guess.players[guess.playersParticipating[i]];
         }
 
