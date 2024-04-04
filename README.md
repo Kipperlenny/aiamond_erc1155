@@ -2,8 +2,7 @@
 
 This project is a Solidity ERC1155 smart contract for the Aiamond platform. It creates three types of token. Chips as a utility for the plattform, Dealer NFTs for guessing token prices and Player NFTs for revealing guesses.
 
-Check out the project on https://aiamond.com
-Join our Discord: https://discord.gg/T92Ekjg3fx
+Check out the project on https://aiamond.com and join our Discord: https://discord.gg/T92Ekjg3fx
 
 ## Description
 
