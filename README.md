@@ -21,6 +21,35 @@ The tests for the contract are located in the test folder, in a file named aiamo
 npx hardhat test
 ```
 
+## Testing with Next.JS dApp
+I added a Next.JS dApp to the project to have a UI for testing the Smart Contract. Before you start it locally, please add a projectID from WalletConnect to dapp/env.local (copy example.env to env.local first).
+
+
+First we need to compile the contract and start the local network:
+
+```shell
+npx hardhat compile
+npx hardhat node
+```
+
+
+In a second shell we need to deploy the contract:
+
+```shell
+npx hardhat run --network localhost scripts/deploy.js
+```
+
+
+In a new shell we need to start Next.JS:
+
+```shell
+npm run dev
+```
+
+
+If you now start your browser and check http://localhost:3000/ you should see the WalletConnect Button, you can than connect with f.e. MetaMask.
+
+
 ## Events
 The contract emits several events to indicate various actions:
 

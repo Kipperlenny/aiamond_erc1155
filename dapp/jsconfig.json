@@ -1,0 +1,8 @@
+{
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./src/app/*", "./src/context/*", "./src/components/*"],
+      "@smart/*": ["../*"]
+    }
+  }
+}
